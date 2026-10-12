@@ -722,6 +722,39 @@ func preview_range(tid: String) -> void:
 
 # --- autoplay bot ----------------------------------------------------------------------------------
 
+## Rough worth of a hero at a level on a spot: damage per second (with splash, chains and crowd
+## control counted generously) times how much road it can reach.
+func _worth(id: String, lv: int, pad: int) -> float:
+	var d: Dictionary = Data.TOWERS[id]
+	var dps: float = d.dmg[lv] * d.rate[lv]
+	match id:
+		"ember": dps *= 1.9
+		"litho": dps *= 2.1
+		"dragon": dps *= 1.0 + 0.8 + 0.64 + (0.5 if d.chain[lv] > 3 else 0.0) + (0.6 if d.chain[lv] > 4 else 0.0)
+		"ninja": dps *= d.multi[lv]
+		"sage": dps = dps * 3.0 + 60.0 * d.slow[lv]
+		"grove": dps = dps * 3.0 + 40.0 * d.root[lv]
+		"ghost": dps *= 1.3
+	return dps * _cover(pad, d.range[lv])
+
+
+var _cover_cache := {}
+
+
+func _cover(pad: int, r: float) -> float:
+	var key := "%d:%.1f" % [pad, r]
+	if _cover_cache.has(key):
+		return _cover_cache[key]
+	var n := 0.0
+	var p := level.pads[pad]
+	for pts in level.roads:
+		for k in range(0, pts.size(), 4):
+			if Vector2(pts[k].x - p.x, pts[k].z - p.z).length() <= r:
+				n += 1.0
+	_cover_cache[key] = n
+	return n
+
+
 func _bot(dt: float) -> void:
 	_bot_t -= dt
 	if _bot_t > 0.0:
@@ -730,38 +763,52 @@ func _bot(dt: float) -> void:
 	if state == PREP and time > 2.0:
 		call_wave()
 	var heroes: Array = Game.heroes_for(plane)
-	# a mix that covers everything: damage first, then support and specialists
-	var order := ["champion", "ember", "ninja", "litho", "champion", "sage", "dragon", "ghost", "grove", "ember", "ninja", "ghost", "dragon", "litho", "champion", "ember", "grove", "ninja"]
-	var free := -1
-	for i in level.pads.size():
-		if not towers.has(i):
-			free = i
-			break
-	var want := ""
-	var tries := 0
-	while tries < order.size():
-		var cand: String = order[(_bot_order + tries) % order.size()]
-		if cand in heroes:
-			want = cand
-			break
-		tries += 1
-	var upgrades := []
+	var counts := {}
+	var air := 0
 	for t in towers.values():
-		if (t as Tower).can_upgrade():
-			upgrades.append(t)
-	upgrades.sort_custom(func(a, b): return a.upgrade_cost() < b.upgrade_cost())
-	var prefer_upgrade := towers.size() >= 5 and not upgrades.is_empty() and (_bot_order % 3 != 0 or free < 0)
-	if free >= 0 and want != "" and not prefer_upgrade:
-		if build(free, want):
-			_bot_order += tries + 1
-	elif not upgrades.is_empty():
-		if upgrade((upgrades[0] as Tower).pad):
-			_bot_order += 1
+		counts[t.id] = int(counts.get(t.id, 0)) + 1
+		if t.def.air:
+			air += 1
+	var flyers: bool = "drake" in Data.PLANES[plane].roster
+	# every option: [value per mana, cost, callable]
+	var best: Array = []
+	var options := []
+	for i in level.pads.size():
+		if towers.has(i):
+			var t: Tower = towers[i]
+			if t.can_upgrade():
+				var gain := _worth(t.id, t.level + 1, i) - _worth(t.id, t.level, i)
+				options.append([gain / t.upgrade_cost() * 1.1, t.upgrade_cost(), "up", i, ""])
+		else:
+			for id in heroes:
+				var v := _worth(id, 0, i) * pow(0.82, counts.get(id, 0))
+				if flyers and air < 3 and not Data.TOWERS[id].air:
+					v *= 0.5
+				options.append([v / Data.TOWERS[id].cost[0], Data.TOWERS[id].cost[0], "build", i, id])
+	if options.is_empty():
+		return
+	options.sort_custom(func(a, b): return a[0] > b[0])
+	best = options[0]
+	var pick: Array = []
+	if mana >= best[1]:
+		pick = best
+	else:
+		for o in options:
+			if o[0] < best[0] * 0.75:
+				break
+			if mana >= o[1]:
+				pick = o
+				break
+	if not pick.is_empty():
+		if pick[2] == "up":
+			upgrade(pick[3])
+		else:
+			build(pick[3], pick[4])
 	# spells when there is something worth hitting
 	if spell_cd[1] <= 0.0 and (boss != null and boss.remaining() < 15.0 or enemies.size() > 25):
 		cast(1, Vector3.ZERO)
 	if spell_cd[0] <= 0.0 and enemies.size() > 6:
-		var best: Enemy = null
+		var centre: Enemy = null
 		var bn := 0
 		for e in enemies:
 			var n := 0
@@ -770,6 +817,6 @@ func _bot(dt: float) -> void:
 					n += 1
 			if n > bn:
 				bn = n
-				best = e
-		if best and bn >= 5:
-			cast(0, best.position)
+				centre = e
+		if centre and bn >= 5:
+			cast(0, centre.position)

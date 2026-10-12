@@ -102,7 +102,7 @@ const ENEMIES := {
 		"desc": "A siege engine grown from the Realmbreaker's own bark of steel."},
 	"walker": {"name": "Compleated Walker", "hp": 5200, "speed": 0.72, "armor": 0.2, "resist": 0.5, "bounty": 260, "leak": 10, "size": 1.8, "boss": true, "spit": true,
 		"desc": "A planeswalker who lost the fight inside. Oils the heroes as it passes."},
-	"mother": {"name": "The Porcelain Mother", "hp": 11000, "speed": 0.5, "armor": 0.4, "resist": 0.4, "bounty": 0, "leak": 20, "size": 2.6, "boss": true, "spit": true, "summon": true,
+	"mother": {"name": "The Porcelain Mother", "hp": 7500, "speed": 0.45, "armor": 0.3, "resist": 0.3, "bounty": 0, "leak": 20, "size": 2.6, "boss": true, "spit": true, "summon": true,
 		"desc": "The Mother of Machines herself. Her word is the only word."},
 }
 

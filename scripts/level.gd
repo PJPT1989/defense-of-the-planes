@@ -195,7 +195,7 @@ func _pick_pads() -> void:
 			z += 0.5
 		x += 0.5
 	cands.sort_custom(func(p, q): return p[0] > q[0])
-	var want := 14 + roads.size() * 2
+	var want := 14 + roads.size() * 2 + (2 if theme == "phyrexia" else 0)
 	for c in cands:
 		var p: Vector2 = c[1]
 		var ok := true

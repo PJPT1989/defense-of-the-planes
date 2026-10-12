@@ -525,6 +525,8 @@ func _simtest() -> void:
 		while b.state != Battle.WON and b.state != Battle.LOST and steps < 60 * 60 * 30:
 			b.simulate(1.0 / 30.0)
 			steps += 1
+			if verbose and b.boss and steps % 300 == 0:
+				print("    boss hp %d / %d dist %.1f / %.1f lives %d alive %d" % [b.boss.hp, b.boss.max_hp, b.boss.dist, b.level.road_len[b.boss.road], b.lives, b.enemies.size()])
 			if verbose and b.wave_i != last_w:
 				last_w = b.wave_i
 				var tl := []
