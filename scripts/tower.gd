@@ -1,7 +1,7 @@
 class_name Tower
 extends Node3D
 ## One hero on a build spot: picks a target in range, turns to face it and attacks with a
-## swing of the arm. Can be upgraded twice, sold, set to aim at the first, strongest or last
+## swing of the arm. Can be upgraded four times (levels 4 and 5 add a glowing crown), sold, set to aim at the first, strongest or last
 ## Phyrexian, and frozen for a while by Phyrexian oil.
 
 const MODES := ["First", "Strongest", "Last"]
@@ -16,10 +16,13 @@ var mode := 0
 var cool := 0.5
 var oiled := 0.0
 var kills := 0
+## Damage and speed bonus from a Warmarshal's banner nearby (set by Battle every step).
+var buff := 0.0
 var _base: MeshInstance3D
 var _fig: Node3D
 var _arm: Node3D
 var _orbit: Node3D
+var _crown: Node3D
 var _oil: MeshInstance3D
 var _model: Dictionary
 var _swing := 0.0
@@ -70,6 +73,14 @@ func _build() -> void:
 		o.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_orbit.add_child(o)
 		_fig.add_child(_orbit)
+	_crown = null
+	if _model.get("crown"):
+		_crown = Node3D.new()
+		var c := MeshInstance3D.new()
+		c.mesh = _model.crown
+		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_crown.add_child(c)
+		add_child(_crown)
 	if _oil_mesh == null:
 		var m := MeshKit.new()
 		for k in 9:
@@ -90,12 +101,15 @@ func range_now() -> float:
 	return def.range[level]
 
 
+const MAX_LEVEL := 4
+
+
 func can_upgrade() -> bool:
-	return level < 2
+	return level < MAX_LEVEL
 
 
 func upgrade_cost() -> int:
-	return def.cost[level + 1] if level < 2 else 0
+	return def.cost[level + 1] if level < MAX_LEVEL else 0
 
 
 func sell_value() -> int:
@@ -109,7 +123,7 @@ func upgrade() -> void:
 
 
 func get_oiled(t: float) -> void:
-	oiled = maxf(oiled, t * (0.6 if level == 2 else 1.0))
+	oiled = maxf(oiled, t * (0.6 if level >= 2 else 1.0) * (0.7 if level >= 4 else 1.0))
 
 
 func step(dt: float) -> void:
@@ -118,6 +132,9 @@ func step(dt: float) -> void:
 		_build_t = maxf(_build_t - dt, 0.0)
 		var s := 1.0 - _build_t / 0.35
 		scale = Vector3(1, 0.4 + 0.6 * s, 1) * (0.9 + 0.1 * s) * Level.MODEL_SCALE
+	if _crown:
+		_crown.rotation.y += dt * 0.6
+		_crown.position.y = sin(_idle * 0.9) * 0.05
 	if _orbit:
 		_orbit.rotation.y += dt * _model.orbit_spin
 		_orbit.position.y = sin(_idle * 1.3) * 0.04
@@ -147,7 +164,7 @@ func step(dt: float) -> void:
 	else:
 		_arm.rotation.x = lerpf(_arm.rotation.x, sin(_idle * 1.5) * 0.06, dt * 4.0)
 	if cool <= 0.0 and target:
-		cool = 1.0 / def.rate[level]
+		cool = 1.0 / (def.rate[level] * (1.0 + buff * 0.5))
 		_swing = 1.0
 		battle.tower_attack(self, target)
 

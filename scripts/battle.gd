@@ -1,6 +1,7 @@
 class_name Battle
 extends Node3D
-## One defense of one plane: the waves, mana and sanctum lives, heroes and their attacks,
+## One defense of one plane: the waves (campaign, Long Siege or Endless), mana and sanctum
+## lives, heroes and their attacks (and the Warmarshal's rallying aura),
 ## projectiles, the two spells, the camera, mouse picking and an autoplay bot (used by the
 ## title screen backdrop, the smoke test and the balance simulation).
 
@@ -9,12 +10,17 @@ signal finished(won: bool)
 enum { PREP, RUNNING, WON, LOST }
 const LIVES := 20
 const WAVE_BREAK := 14.0
+## How much tougher each wave past the campaign's length gets (on top of the usual growth).
+const LATE_GROWTH := 1.06
+## Bounties past the campaign's length, so a long game can't max out every hero.
+const LATE_BOUNTY := 0.55
 const SPELLS := [
 	{"id": "halo", "name": "Halo Burst", "key": "Q", "cd": 35.0, "desc": "Call down a column of halo light: heavy damage in a small area. Click where."},
 	{"id": "stasis", "name": "Stasis", "key": "E", "cd": 50.0, "desc": "Bend time over the whole field: every Phyrexian stops for 3 seconds."},
 ]
 
 var plane := 0
+var mode := Data.CAMPAIGN
 var level: Level
 var fx: Fx
 var camera: Camera3D
@@ -38,7 +44,7 @@ var spell_cd: Array[float] = [0.0, 0.0]
 var stats := {"kills": 0, "leaked": 0, "earned": 0, "built": 0}
 var boss: Enemy = null
 var hp_scale := 1.0
-var _queue: Array = []   # [time, kind, road]
+var _queue: Array = []   # [time, kind, road, hp]
 var _shots: Array = []   # projectile dictionaries
 var _range_ring: MeshInstance3D
 var _pad_ring: MeshInstance3D
@@ -47,18 +53,19 @@ var _cam_zoom := 1.0
 var _cam_fit := 40.0
 var _drag := false
 var _bot_t := 0.0
-var _bot_order := 0
+var _bot_saving := 0.0
 var _pitch := deg_to_rad(57.0)
 
 static var _shot_meshes := {}
 
 
-func setup(p: int) -> void:
+func setup(p: int, m := Data.CAMPAIGN) -> void:
 	plane = p
+	mode = m
 	var d: Dictionary = Data.PLANES[p]
 	hp_scale = d.hp
 	mana = d.mana
-	waves = Data.waves_for(p)
+	waves = Data.waves_for(p, mode)
 	level = Level.new()
 	add_child(level)
 	level.setup(p)
@@ -279,6 +286,8 @@ func next_wave_preview() -> Dictionary:
 
 
 func call_wave() -> void:
+	if mode == Data.ENDLESS and wave_i + 3 >= waves.size():
+		waves = Data.waves_for(plane, mode, waves.size() + 10)
 	if wave_i >= waves.size() or state in [WON, LOST]:
 		return
 	if state == RUNNING and wave_timer > 0.0:
@@ -293,19 +302,32 @@ func call_wave() -> void:
 	for g in w:
 		for k in g.count:
 			var at: float = time + g.delay + k * g.gap
-			_queue.append([at, g.kind, g.road % level.roads.size()])
+			_queue.append([at, g.kind, g.road % level.roads.size(), g.get("hp", 1.0)])
 			span = maxf(span, g.delay + k * g.gap)
 	_queue.sort_custom(func(a, b): return a[0] < b[0])
 	wave_i += 1
-	wave_timer = span + WAVE_BREAK if wave_i < waves.size() else 0.0
+	wave_timer = span + WAVE_BREAK if wave_i < waves.size() or mode == Data.ENDLESS else 0.0
 	Game.play("horn", -6.0)
 
 
-func _spawn(kind: String, road: int, at := Level.SPAWN_AT) -> Enemy:
+## How much tougher than usual the current wave's foes are.
+func wave_scale() -> float:
+	var ws := 1.0 + 0.045 * maxi(wave_i - 1, 0)
+	# past the campaign's length the horde hardens a little more every wave
+	var past: int = wave_i - Data.PLANES[plane].waves
+	if past > 0:
+		ws *= pow(LATE_GROWTH, past)
+	return ws
+
+
+func _spawn(kind: String, road: int, at := Level.SPAWN_AT, hp_mul := 1.0) -> Enemy:
 	var e := Enemy.new()
 	add_child(e)
-	var wave_scale := 1.0 + 0.045 * maxi(wave_i - 1, 0)
-	e.setup(kind, self, road, at, hp_scale * (1.0 if Data.ENEMIES[kind].get("boss", false) else wave_scale))
+	var is_boss: bool = Data.ENEMIES[kind].get("boss", false)
+	e.setup(kind, self, road, at, hp_scale * hp_mul * (1.0 if is_boss else wave_scale()))
+	if not is_boss:
+		# tougher merged groups pay a little more, but less than their life grows
+		e.bounty_mul = pow(hp_mul, 0.45) * (LATE_BOUNTY if wave_i > Data.PLANES[plane].waves else 1.0)
 	enemies.append(e)
 	if e.boss:
 		boss = e
@@ -315,7 +337,7 @@ func _spawn(kind: String, road: int, at := Level.SPAWN_AT) -> Enemy:
 
 
 func enemy_died(e: Enemy) -> void:
-	var b: int = e.def.bounty
+	var b := int(round(e.def.bounty * e.bounty_mul))
 	mana += b
 	stats.kills += 1
 	stats.earned += b
@@ -394,7 +416,7 @@ func cast(i: int, at: Vector3) -> void:
 			Game.play("burst", -2.0)
 			for e in enemies.duplicate():
 				if e.alive and Vector2(e.position.x - at.x, e.position.z - at.z).length() < 2.6:
-					e.damage(260.0 * hp_scale, "true")
+					e.damage(260.0 * hp_scale * wave_scale(), "true")
 		"stasis":
 			Game.play("stasis", -2.0)
 			for e in enemies:
@@ -430,7 +452,7 @@ func pick_target(t: Tower, skip: Enemy = null) -> Enemy:
 
 func tower_attack(t: Tower, target: Enemy) -> void:
 	var lv := t.level
-	var dmg: float = t.def.dmg[lv]
+	var dmg: float = t.def.dmg[lv] * (1.0 + t.buff)
 	var from := t.muzzle()
 	match t.id:
 		"champion":
@@ -492,6 +514,21 @@ func tower_attack(t: Tower, target: Enemy) -> void:
 			_shots.append({"kind": "dagger", "node": _shot_node("dagger"), "pos": from, "target": target, "speed": 20.0, "dmg": dmg, "type": "true",
 				"execute": t.def.execute[lv]})
 			Game.play("ghost", -12.0)
+		"tide":
+			var to := target.predict(0.7)
+			to.y = 0.0
+			_shots.append({"kind": "wave", "node": _shot_node("wave"), "from": from, "to": to, "t": 0.0, "dur": 0.7, "arc": 1.4,
+				"dmg": dmg, "type": "magic", "splash": t.def.splash[lv], "knock": t.def.knock[lv], "air": false})
+			Game.play("chime", -12.0)
+		"marshal":
+			_shots.append({"kind": "spear", "node": _shot_node("spear"), "pos": from, "target": target, "speed": 17.0,
+				"dmg": dmg, "type": "phys", "boss_bonus": 0.0})
+			Game.play("spear", -12.0)
+		"raptor":
+			var to := target.predict(0.45)
+			_shots.append({"kind": "javelin", "node": _shot_node("javelin"), "from": from, "to": to, "t": 0.0, "dur": 0.45, "arc": 0.9,
+				"dmg": dmg, "type": "phys", "splash": t.def.splash[lv], "sunder": t.def.sunder[lv], "air": false})
+			Game.play("spear", -9.0)
 		"grove":
 			fx.ring(t.position, t.range_now(), Color(0.55, 1.0, 0.4), 0.6, 0.1)
 			var n := 0
@@ -526,6 +563,12 @@ func _shot_node(kind: String) -> Node3D:
 				Models._hedron(m, Vector3.ZERO, 0.22, 0.5, 0.0, Color(0.58, 0.56, 0.52), Color(0.35, 1.0, 0.85))
 			"dagger":
 				m.cyl(Vector3(0, 0, 0.15), Vector3(0, 0, -0.35), 0.05, 0.0, Color(0.8, 0.55, 1.0), 6, true)
+			"wave":
+				m.sphere(Vector3.ZERO, Vector3(0.26, 0.2, 0.26), Color(0.25, 0.65, 0.9), 10, 6, true)
+				m.sphere(Vector3(0, 0.1, 0), Vector3(0.16, 0.12, 0.16), Color(0.85, 0.97, 1.0), 8, 5, true)
+			"javelin":
+				m.cyl(Vector3(0, 0, 0.45), Vector3(0, 0, -0.3), 0.022, 0.022, Color(0.6, 0.4, 0.2), 5)
+				m.cyl(Vector3(0, 0, -0.3), Vector3(0, 0, -0.55), 0.06, 0.0, Color(1.0, 0.8, 0.3), 5, true)
 			"oil":
 				m.sphere(Vector3.ZERO, Vector3(0.16, 0.14, 0.16), Color(1, 1, 1, 0.95), 8, 5)
 		var mesh := m.commit()
@@ -539,7 +582,7 @@ func _shot_node(kind: String) -> Node3D:
 	return mi
 
 
-func _splash(at: Vector3, radius: float, dmg: float, type: String, air: bool, burn := 0.0) -> void:
+func _splash(at: Vector3, radius: float, dmg: float, type: String, air: bool, burn := 0.0, knock := 0.0, sunder := 0.0) -> void:
 	for e in enemies.duplicate():
 		if not e.alive or (e.flying and not air):
 			continue
@@ -548,7 +591,11 @@ func _splash(at: Vector3, radius: float, dmg: float, type: String, air: bool, bu
 			var f := 1.0 if d < radius * 0.5 else 0.6
 			if burn > 0.0:
 				e.apply_burn(burn, 2.5)
+			if sunder > 0.0:
+				e.apply_sunder(sunder, 4.0)
 			e.damage(dmg * f, type)
+			if knock > 0.0 and e.alive:
+				e.knock_back(knock * f)
 
 
 func _step_shots(dt: float) -> void:
@@ -594,8 +641,15 @@ func _step_shots(dt: float) -> void:
 			var t: float = minf(s.t, 1.0)
 			var p: Vector3 = (s.from as Vector3).lerp(s.to, t) + Vector3(0, s.arc * 4.0 * t * (1.0 - t), 0)
 			node.position = p
-			if s.kind == "hedron":
+			if s.kind == "hedron" or s.kind == "wave":
 				node.rotation.y += dt * 4.0
+			elif s.kind == "javelin":
+				var t2 := minf(t + 0.05, 1.0)
+				var ahead: Vector3 = (s.from as Vector3).lerp(s.to, t2) + Vector3(0, s.arc * 4.0 * t2 * (1.0 - t2), 0)
+				if ahead.distance_to(p) > 0.001:
+					node.look_at(ahead, Vector3.UP)
+			if s.kind == "wave" and randf() < 0.7:
+				fx.spark(p, Vector3(randf_range(-0.4, 0.4), -0.2, randf_range(-0.4, 0.4)), Color(0.6, 0.9, 1.0), 0.35, 0.1)
 			if s.kind == "fireball" and randf() < 0.8:
 				fx.spark(p, Vector3(randf_range(-0.3, 0.3), 0.3, randf_range(-0.3, 0.3)), Color(1.0, 0.5, 0.1), 0.35, 0.12)
 			if t >= 1.0:
@@ -611,6 +665,16 @@ func _step_shots(dt: float) -> void:
 						fx.burst(s.to + Vector3(0, 0.3, 0), Color(0.35, 1.0, 0.85), 8, 2.5, 0.4, 0.1)
 						fx.ring(Vector3(s.to.x, 0, s.to.z), s.splash, Color(0.4, 1.0, 0.85), 0.4, 0.08)
 						Game.play("rock", -8.0)
+					"wave":
+						_splash(s.to, s.splash, s.dmg, "magic", false, 0.0, s.knock)
+						fx.burst(s.to + Vector3(0, 0.2, 0), Color(0.35, 0.75, 1.0), 18, 3.5, 0.6, 0.14)
+						fx.burst(s.to + Vector3(0, 0.3, 0), Color(0.9, 0.98, 1.0), 10, 2.5, 0.5, 0.1)
+						fx.ring(Vector3(s.to.x, 0, s.to.z), s.splash, Color(0.4, 0.8, 1.0), 0.5, 0.08)
+						Game.play("splat", -10.0)
+					"javelin":
+						_splash(s.to, s.splash, s.dmg, "phys", false, 0.0, 0.0, s.sunder)
+						fx.burst(s.to + Vector3(0, 0.2, 0), Color(1.0, 0.8, 0.3), 14, 3.0, 0.45, 0.12)
+						fx.ring(Vector3(s.to.x, 0, s.to.z), s.splash, Color(1.0, 0.75, 0.3), 0.35, 0.06)
 					"oil":
 						var tw = s.tower
 						if is_instance_valid(tw):
@@ -647,7 +711,7 @@ func simulate(dt: float) -> void:
 	if state == RUNNING:
 		while not _queue.is_empty() and _queue[0][0] <= time:
 			var q: Array = _queue.pop_front()
-			_spawn(q[1], q[2])
+			_spawn(q[1], q[2], Level.SPAWN_AT, q[3])
 		if wave_timer > 0.0:
 			wave_timer -= dt
 			if wave_timer <= 0.0:
@@ -664,6 +728,7 @@ func simulate(dt: float) -> void:
 			enemies.remove_at(k)
 		else:
 			k += 1
+	_update_auras()
 	for t in towers.values():
 		(t as Tower).step(dt)
 	_step_shots(dt)
@@ -674,10 +739,25 @@ func simulate(dt: float) -> void:
 		state = LOST
 		Game.play("lose")
 		finished.emit(false)
-	elif state == RUNNING and wave_i >= waves.size() and _queue.is_empty() and enemies.is_empty():
+	elif mode != Data.ENDLESS and state == RUNNING and wave_i >= waves.size() and _queue.is_empty() and enemies.is_empty():
 		state = WON
 		Game.play("win")
 		finished.emit(true)
+
+
+## The Warmarshal's banner: every other hero within her range gets her bonus (the best one if
+## several reach it; they do not stack).
+func _update_auras() -> void:
+	var marshals := []
+	for t in towers.values():
+		(t as Tower).buff = 0.0
+		if t.id == "marshal":
+			marshals.append(t)
+	for m in marshals:
+		var r: float = m.range_now()
+		for t in towers.values():
+			if t != m and Vector2(t.position.x - m.position.x, t.position.z - m.position.z).length() <= r:
+				t.buff = maxf(t.buff, m.def.aura[m.level])
 
 
 func stars_won() -> int:
@@ -732,13 +812,46 @@ func _worth(id: String, lv: int, pad: int) -> float:
 		"litho": dps *= 2.1
 		"dragon": dps *= 1.0 + 0.8 + 0.64 + (0.5 if d.chain[lv] > 3 else 0.0) + (0.6 if d.chain[lv] > 4 else 0.0)
 		"ninja": dps *= d.multi[lv]
-		"sage": dps = dps * 3.0 + 60.0 * d.slow[lv]
+		"sage": dps = dps * 2.5 + 45.0 * d.slow[lv]
 		"grove": dps = dps * 3.0 + 40.0 * d.root[lv]
 		"ghost": dps *= 1.3
-	return dps * _cover(pad, d.range[lv])
+		"tide": dps = dps * 2.2 + 30.0 * d.knock[lv]
+		"raptor": dps *= 1.6 + d.sunder[lv] * 2.0
+		"marshal":
+			# worth the bonus it gives the heroes around it (or would give, for a spot near others)
+			var near := 0.0
+			for t in towers.values():
+				if t.pad != pad and t.id != "marshal" and t.position.distance_to(level.pads[pad]) <= d.range[lv]:
+					near += _worth(t.id, t.level, t.pad)
+			return dps * _cover(pad, d.range[lv]) + near * d.aura[lv]
+	return dps * _cover(pad, d.range[lv]) * _type_mult(d.type, d.air)
 
 
 var _cover_cache := {}
+var _type_cache := {}
+
+
+## How well a damage type does against the next five waves (1 = no armour or wards in the way).
+func _type_mult(type: String, air: bool) -> float:
+	var key := "%d:%s:%s" % [wave_i, type, air]
+	if _type_cache.has(key):
+		return _type_cache[key]
+	var total := 0.0
+	var got := 0.0
+	for w in range(wave_i, mini(wave_i + 5, waves.size())):
+		for g in waves[w]:
+			var e: Dictionary = Data.ENEMIES[g.kind]
+			var weight: float = g.count * e.hp * g.get("hp", 1.0)
+			total += weight
+			if e.get("fly", false) and not air:
+				continue
+			match type:
+				"phys": got += weight * (1.0 - e.armor)
+				"magic": got += weight * (1.0 - e.resist)
+				_: got += weight
+	var m := 1.0 if total <= 0.0 else got / total
+	_type_cache[key] = m
+	return m
 
 
 func _cover(pad: int, r: float) -> float:
@@ -776,9 +889,12 @@ func _bot(dt: float) -> void:
 	for i in level.pads.size():
 		if towers.has(i):
 			var t: Tower = towers[i]
-			if t.can_upgrade():
+			# the late upgrades only once most spots are taken
+			var late_ok := t.level < 2 or towers.size() >= level.pads.size() * 0.7
+			if t.can_upgrade() and late_ok:
 				var gain := _worth(t.id, t.level + 1, i) - _worth(t.id, t.level, i)
-				options.append([gain / t.upgrade_cost() * 1.1, t.upgrade_cost(), "up", i, ""])
+				var f := 1.1 if t.level < 2 else 0.9
+				options.append([gain / t.upgrade_cost() * f, t.upgrade_cost(), "up", i, ""])
 		else:
 			for id in heroes:
 				var v := _worth(id, 0, i) * pow(0.82, counts.get(id, 0))
@@ -793,13 +909,17 @@ func _bot(dt: float) -> void:
 	if mana >= best[1]:
 		pick = best
 	else:
+		# save up for the best buy, but not for long: after a while take the best one we can afford
+		_bot_saving += 0.4
+		var floor_v: float = best[0] * (0.75 if _bot_saving < 20.0 else 0.0)
 		for o in options:
-			if o[0] < best[0] * 0.75:
+			if o[0] < floor_v:
 				break
 			if mana >= o[1]:
 				pick = o
 				break
 	if not pick.is_empty():
+		_bot_saving = 0.0
 		if pick[2] == "up":
 			upgrade(pick[3])
 		else:

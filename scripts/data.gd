@@ -10,74 +10,101 @@ extends RefCounted
 ## to the Realmbreaker's root on Phyrexia itself.
 
 ## dmg types: "phys" (armour stops it), "magic" (resistance stops it), "true" (nothing does).
-## Per-level arrays are [level 1, 2, 3]. cost[0] builds, cost[1] and cost[2] upgrade.
+## Per-level arrays are [level 1 .. 5]. cost[0] builds, cost[1] to cost[4] upgrade.
+## Levels 4 and 5 (Exalted and Legendary) are the late-game upgrades: expensive but strong.
 const TOWERS := {
 	"champion": {
 		"name": "Sunsworn Champion", "title": "Knight of the Last Dawn", "plane": 0,
-		"cost": [90, 110, 160], "dmg": [24, 40, 66], "rate": [0.95, 1.0, 1.1], "range": [4.3, 4.6, 5.0],
-		"type": "phys", "air": true, "boss_bonus": [0.25, 0.4, 0.6],
+		"cost": [90, 110, 160, 320, 480], "dmg": [24, 40, 66, 100, 150], "rate": [0.95, 1.0, 1.1, 1.2, 1.3], "range": [4.3, 4.6, 5.0, 5.3, 5.6],
+		"type": "phys", "air": true, "boss_bonus": [0.25, 0.4, 0.6, 0.8, 1.0],
 		"color": Color(1.0, 0.86, 0.45),
 		"desc": "A knight who has already died once and came back to finish the job. Hurls spears of sunlight; extra damage to the Phyrexian champions.",
 		"lore": "Bearer of the god-forged spear. She swore to see the Mother of Machines fall.",
 	},
 	"ember": {
 		"name": "Ember Prodigy", "title": "Pyromancer of the Inventors' City", "plane": 0,
-		"cost": [110, 130, 180], "dmg": [16, 27, 42], "rate": [0.8, 0.85, 0.9], "range": [4.0, 4.2, 4.5],
-		"type": "magic", "air": true, "splash": [1.4, 1.6, 1.9], "burn": [4.0, 7.0, 11.0],
+		"cost": [110, 130, 180, 360, 540], "dmg": [16, 27, 42, 62, 90], "rate": [0.8, 0.85, 0.9, 0.95, 1.0], "range": [4.0, 4.2, 4.5, 4.8, 5.1],
+		"type": "magic", "air": true, "splash": [1.4, 1.6, 1.9, 2.1, 2.4], "burn": [4.0, 7.0, 11.0, 17.0, 26.0],
 		"color": Color(1.0, 0.45, 0.12),
 		"desc": "Throws fireballs that burst on the horde and leave it burning. Best against crowds.",
 		"lore": "Her hair is literally on fire. She is fine with that.",
 	},
 	"sage": {
 		"name": "Timeweaver Sage", "title": "Keeper of Lost Hours", "plane": 0,
-		"cost": [80, 100, 140], "dmg": [6, 10, 16], "rate": [0.8, 0.85, 0.9], "range": [3.6, 3.9, 4.3],
-		"type": "magic", "air": true, "slow": [0.35, 0.45, 0.55], "slow_time": [1.6, 1.8, 2.1],
+		"cost": [80, 100, 140, 280, 420], "dmg": [6, 10, 16, 24, 36], "rate": [0.8, 0.85, 0.9, 0.95, 1.0], "range": [3.6, 3.9, 4.3, 4.6, 5.0],
+		"type": "magic", "air": true, "slow": [0.35, 0.45, 0.55, 0.6, 0.65], "slow_time": [1.6, 1.8, 2.1, 2.3, 2.6],
 		"color": Color(0.45, 0.8, 1.0),
 		"desc": "Pulses of bent time slow every Phyrexian around him. Pair him with heavy hitters.",
 		"lore": "He once hid a whole country in a pocket of time. Twenty minutes is easy.",
 	},
 	"ninja": {
 		"name": "Moonblade Ninja", "title": "Shadow of the Neon City", "plane": 1,
-		"cost": [100, 120, 170], "dmg": [7, 11, 16], "rate": [2.8, 3.1, 3.4], "range": [3.9, 4.1, 4.4],
-		"type": "phys", "air": true, "multi": [1, 1, 2],
+		"cost": [100, 120, 170, 340, 510], "dmg": [7, 11, 16, 24, 34], "rate": [2.8, 3.1, 3.4, 3.7, 4.0], "range": [3.9, 4.1, 4.4, 4.7, 5.0],
+		"type": "phys", "air": true, "multi": [1, 1, 2, 2, 3],
 		"color": Color(0.6, 0.75, 1.0),
-		"desc": "A blur of shuriken, very fast, good against swarms and flyers. At level 3 he throws at two targets.",
+		"desc": "A blur of shuriken, very fast, good against swarms and flyers. At level 3 he throws at two targets, at level 5 at three.",
 		"lore": "Thief, bodyguard, brother. His little drone keeps the score.",
 	},
 	"litho": {
 		"name": "Hedron Lithomancer", "title": "Stoneshaper of the Wild World", "plane": 2,
-		"cost": [130, 150, 210], "dmg": [42, 72, 118], "rate": [0.42, 0.45, 0.5], "range": [5.0, 5.4, 5.9],
-		"type": "phys", "air": false, "splash": [1.7, 1.9, 2.2],
+		"cost": [130, 150, 210, 420, 630], "dmg": [42, 72, 118, 175, 260], "rate": [0.42, 0.45, 0.5, 0.53, 0.56], "range": [5.0, 5.4, 5.9, 6.2, 6.6],
+		"type": "phys", "air": false, "splash": [1.7, 1.9, 2.2, 2.4, 2.7],
 		"color": Color(0.5, 0.95, 0.85),
 		"desc": "Drops carved hedron stones from the sky. Slow, long range, huge splash. Cannot hit flyers.",
 		"lore": "Old as the mountains and just as patient. She shaped these stones herself.",
 	},
+	"tide": {
+		"name": "Tidecaller", "title": "Sea-Singer of the Drowned Coast", "plane": 2,
+		"cost": [150, 170, 240, 480, 720], "dmg": [20, 32, 52, 78, 115], "rate": [0.45, 0.48, 0.52, 0.56, 0.6], "range": [4.4, 4.7, 5.0, 5.3, 5.6],
+		"type": "magic", "air": false, "splash": [1.5, 1.7, 1.9, 2.1, 2.4], "knock": [1.2, 1.5, 1.8, 2.2, 2.7],
+		"color": Color(0.3, 0.78, 0.95),
+		"desc": "Brings a crashing wave down on the road: splash damage that throws Phyrexians back up the road. Bosses barely budge. Cannot reach flyers.",
+		"lore": "She sings to the leviathans of the deep. Lately the sea itself sings back.",
+	},
 	"dragon": {
 		"name": "Stormmind Dragon", "title": "Firemind of the City of Guilds", "plane": 3,
-		"cost": [170, 190, 260], "dmg": [30, 48, 76], "rate": [0.7, 0.75, 0.8], "range": [4.6, 4.9, 5.3],
-		"type": "magic", "air": true, "chain": [3, 4, 6],
+		"cost": [170, 190, 260, 520, 780], "dmg": [30, 48, 76, 110, 160], "rate": [0.7, 0.75, 0.8, 0.85, 0.9], "range": [4.6, 4.9, 5.3, 5.6, 6.0],
+		"type": "magic", "air": true, "chain": [3, 4, 6, 7, 9],
 		"color": Color(0.4, 0.75, 1.0),
 		"desc": "Chain lightning that jumps from one Phyrexian to the next.",
 		"lore": "A genius dragon who thinks the invasion is mostly an interesting experiment.",
 	},
+	"marshal": {
+		"name": "Legion Warmarshal", "title": "Banner-General of the City of Guilds", "plane": 3,
+		"cost": [160, 190, 260, 520, 780], "dmg": [10, 16, 24, 34, 48], "rate": [1.0, 1.05, 1.1, 1.15, 1.2], "range": [3.6, 3.9, 4.2, 4.5, 4.8],
+		"type": "phys", "air": true, "aura": [0.15, 0.2, 0.26, 0.33, 0.42],
+		"color": Color(1.0, 0.38, 0.25),
+		"desc": "Raises the war banner: every other hero in her range hits harder and attacks faster. Throws a short spear of her own.",
+		"lore": "She has led the legion through three wars and one apocalypse. This is the second apocalypse.",
+	},
 	"ghost": {
 		"name": "Ghostblade Envoy", "title": "Assassin Between Worlds", "plane": 4,
-		"cost": [140, 160, 220], "dmg": [36, 60, 98], "rate": [0.75, 0.8, 0.85], "range": [4.1, 4.3, 4.6],
-		"type": "true", "air": true, "execute": [0.0, 0.08, 0.14],
+		"cost": [140, 160, 220, 440, 660], "dmg": [36, 60, 98, 145, 215], "rate": [0.75, 0.8, 0.85, 0.9, 0.95], "range": [4.1, 4.3, 4.6, 4.9, 5.2],
+		"type": "true", "air": true, "execute": [0.0, 0.08, 0.14, 0.18, 0.22],
 		"color": Color(0.8, 0.5, 1.0),
 		"desc": "Spectral daggers pass through armour and wards alike. Finishes off badly hurt foes at higher levels.",
 		"lore": "She steps between the living and the dead, and stabs both when needed.",
 	},
 	"grove": {
 		"name": "Grovewarden", "title": "Treefolk and Dryad of the Frozen Realms", "plane": 5,
-		"cost": [150, 170, 230], "dmg": [22, 36, 58], "rate": [0.5, 0.55, 0.6], "range": [3.5, 3.8, 4.1],
-		"type": "magic", "air": false, "root": [0.8, 1.0, 1.25],
+		"cost": [150, 170, 230, 460, 690], "dmg": [22, 36, 58, 85, 125], "rate": [0.5, 0.55, 0.6, 0.63, 0.66], "range": [3.5, 3.8, 4.1, 4.4, 4.7],
+		"type": "magic", "air": false, "root": [0.8, 1.0, 1.25, 1.4, 1.6],
 		"color": Color(0.55, 1.0, 0.45),
 		"desc": "Roots burst from the ground and hold every walker in range for a moment. Cannot reach flyers.",
 		"lore": "A dryad who talks to trees, riding the one tree that talks back.",
 	},
+	"raptor": {
+		"name": "Sun-Rider", "title": "Dinosaur Knight of the Sun Coast", "plane": 5,
+		"cost": [170, 200, 270, 540, 810], "dmg": [34, 56, 88, 128, 185], "rate": [0.8, 0.85, 0.9, 0.95, 1.0], "range": [3.1, 3.3, 3.6, 3.9, 4.2],
+		"type": "phys", "air": false, "splash": [1.1, 1.2, 1.35, 1.5, 1.7], "sunder": [0.15, 0.2, 0.26, 0.32, 0.4],
+		"color": Color(1.0, 0.7, 0.2),
+		"desc": "Hurls sun-blessed javelins from the back of her raptor. They burst on the horde and crack armour and wards, so every hero hurts the struck Phyrexians more. Short range, cannot reach flyers.",
+		"lore": "A poet and a war-leader. She came through a rift on a very angry dinosaur.",
+	},
 }
-const TOWER_ORDER := ["champion", "ember", "sage", "ninja", "litho", "dragon", "ghost", "grove"]
+const TOWER_ORDER := ["champion", "ember", "sage", "ninja", "litho", "tide", "dragon", "marshal", "ghost", "grove", "raptor"]
+## Names of the five hero levels.
+const LEVEL_NAMES := ["Recruit", "Veteran", "Elite", "Exalted", "Legendary"]
 
 ## Phyrexians. hp is for the first plane; later planes multiply it (PLANES[i].hp).
 ## leak is how many sanctum lives one costs if it gets through.
@@ -150,7 +177,7 @@ const PLANES := [
 		"id": "ravnica", "name": "Ravnica", "place": "The Tenth District",
 		"intro": "The city of guilds is one endless street, and the horde is in all of them. Above the spires, a dragon who calls himself a genius takes an interest.",
 		"new": "New hero: Stormmind Dragon. New foes: Glistening Knights, warded against magic.",
-		"hp": 1.18, "mana": 380, "waves": 13, "roster": ["husk", "hound", "drake", "brute", "spitter", "knight"], "boss": "walker",
+		"hp": 1.08, "mana": 420, "waves": 13, "roster": ["husk", "hound", "drake", "brute", "spitter", "knight"], "boss": "walker",
 		"roads": [[Vector2(-23, -3), Vector2(-12, -3), Vector2(-12, -10), Vector2(4, -10), Vector2(4, 0), Vector2(14, 0), Vector2(14, 7), Vector2(23, 7)],
 			[Vector2(-23, 4), Vector2(-12, 4), Vector2(-12, 10), Vector2(4, 10), Vector2(4, 0), Vector2(14, 0), Vector2(14, 7), Vector2(23, 7)]],
 		"theme": "ravnica", "time": "overcast",
@@ -207,29 +234,67 @@ const THREAT := {"mite": 0.4, "husk": 1.0, "hound": 0.9, "brute": 3.6, "drake": 
 const MAX_COUNT := {"brute": 10, "drake": 14, "spitter": 6, "knight": 10, "brood": 4}
 
 
+## Wave modes: the campaign (stars), a Long Siege with twice the waves and a mid-siege boss, and
+## Endless, which goes on (a boss every ten waves) until the sanctum falls.
+enum { CAMPAIGN, LONG, ENDLESS }
+const MODE_NAMES := ["Campaign", "Long Siege", "Endless"]
+const BOSS_CYCLE := ["colossus", "walker", "mother"]
+
+
+## How many waves a mode has on plane `p` (Endless: how many are generated up front).
+static func wave_count(p: int, mode: int) -> int:
+	var n: int = PLANES[p].waves
+	match mode:
+		LONG: return n * 2
+		ENDLESS: return n + 10
+	return n
+
+
 ## Builds the waves of plane `p`: a list of waves, each a list of groups
-## {kind, count, gap (seconds between spawns), delay (seconds after wave start), road}.
+## {kind, count, gap (seconds between spawns), delay (seconds after wave start), road, hp}.
 ## Every wave is mostly fodder (husks, mites, hounds) with a smaller group or two of the
 ## plane's special foes once they have been introduced; the last wave brings the boss.
-static func waves_for(p: int) -> Array:
+## Past the campaign's length the roster widens to every foe, more special groups come, and
+## when a group would grow past its size cap its foes get tougher instead (hp, which also raises
+## their bounty). Wave w is the same whatever `count` is, so Endless can grow the list as it goes.
+static func waves_for(p: int, mode := CAMPAIGN, count := -1) -> Array:
 	var d: Dictionary = PLANES[p]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7919 * (p + 1)
+	if count < 0:
+		count = wave_count(p, mode)
+	var base_n: int = d.waves
 	var roads: int = d.roads.size()
-	var basics := []
-	var specials := []
-	for k in d.roster:
-		if k in ["husk", "mite", "hound"]:
-			basics.append(k)
-		else:
-			specials.append(k)
 	var out := []
-	for w in d.waves:
-		var last: bool = w == d.waves - 1
+	for w in count:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7919 * (p + 1) + 104729 * w
+		var late := w >= base_n
+		var roster: Array = d.roster
+		if w >= base_n + 3:
+			roster = ["husk", "mite", "hound", "brute", "drake", "spitter", "knight", "brood"]
+		var basics := []
+		var specials := []
+		for k in roster:
+			if k in ["husk", "mite", "hound"]:
+				basics.append(k)
+			else:
+				specials.append(k)
 		var budget: float = (8.0 + 3.4 * w + 0.42 * w * w) * (1.0 + 0.05 * p)
 		var groups := []
-		if last:
-			groups.append({"kind": d.boss, "count": 1, "gap": 1.0, "delay": 8.0, "road": 0})
+		var boss := ""
+		var boss_hp := 1.0
+		if mode == CAMPAIGN and w == count - 1:
+			boss = d.boss
+		elif mode == LONG and (w == base_n - 1 or w == count - 1):
+			boss = d.boss
+			boss_hp = 1.0 if w == base_n - 1 else 3.5
+		elif mode == ENDLESS and w == base_n - 1:
+			boss = d.boss
+		elif mode == ENDLESS and w > base_n and (w - base_n + 1) % 10 == 0:
+			var k := int((w - base_n + 1) / 10.0)
+			boss = BOSS_CYCLE[(k - 1 + p) % BOSS_CYCLE.size()]
+			boss_hp = 1.2 + 0.9 * k
+		if boss != "":
+			groups.append({"kind": boss, "count": 1, "gap": 1.0, "delay": 8.0, "road": 0, "hp": boss_hp})
 			budget *= 0.65
 		var open_basics := []
 		for k in basics:
@@ -239,8 +304,9 @@ static func waves_for(p: int) -> Array:
 		for k in specials:
 			if w >= FIRST_WAVE[k] - mini(p, 1):
 				open_specials.append(k)
-		var n_special := 0 if open_specials.is_empty() else mini(1 + int(w / 5.0), open_specials.size())
-		var special_share := 0.0 if n_special == 0 else 0.4
+		var most := 1 + int(w / 5.0) if not late else 2 + int((w - base_n) / 6.0)
+		var n_special := 0 if open_specials.is_empty() else mini(most, open_specials.size())
+		var special_share := 0.0 if n_special == 0 else (0.4 if not late else 0.5)
 		var plan := []
 		var basic: String = open_basics[w % open_basics.size()] if w >= 2 else "husk"
 		var fodder := budget * (1.0 - special_share)
@@ -250,7 +316,7 @@ static func waves_for(p: int) -> Array:
 		if w >= 5 and open_basics.size() > 1 and rng.randf() < 0.5:
 			var other: String = open_basics[(w + 1) % open_basics.size()]
 			plan.append([other, fodder * 0.3, rng.randi_range(0, roads - 1)])
-		open_specials.shuffle()
+		_shuffle(open_specials, rng)
 		var pick := open_specials.duplicate()
 		# make sure the newest foe of the plane is seen soon after it is introduced
 		for k in pick:
@@ -263,9 +329,24 @@ static func waves_for(p: int) -> Array:
 		var delay := 0.0
 		for g in plan:
 			var k: String = g[0]
-			var count := clampi(int(round(g[1] / THREAT[k])), 1, MAX_COUNT.get(k, 30))
+			var cap: int = MAX_COUNT.get(k, 30)
+			if late:
+				cap = int(cap * 1.5)
+			var want: float = g[1] / THREAT[k]
+			var count_k := clampi(int(round(want)), 1, cap)
+			var hp := 1.0
+			if want > cap:
+				hp = pow(want / cap, 0.85)
 			var gap: float = clampf(0.5 + THREAT[k] * 0.3, 0.4, 2.2) * (0.55 if k == "mite" else 1.0)
-			groups.append({"kind": k, "count": count, "gap": gap, "delay": delay, "road": g[2]})
-			delay += count * gap * (0.3 if roads > 1 else 0.55) + 1.0
+			groups.append({"kind": k, "count": count_k, "gap": gap, "delay": delay, "road": g[2], "hp": hp})
+			delay += count_k * gap * (0.3 if roads > 1 else 0.55) + 1.0
 		out.append(groups)
 	return out
+
+
+static func _shuffle(a: Array, rng: RandomNumberGenerator) -> void:
+	for i in range(a.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t = a[i]
+		a[i] = a[j]
+		a[j] = t

@@ -67,7 +67,7 @@ func setup(b: Battle) -> void:
 	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_banner)
 	var d: Dictionary = Data.PLANES[battle.plane]
-	announce("%s - %s" % [d.name, d.place], 3.5)
+	announce("%s - %s" % [d.name, d.place] + ("" if battle.mode == Data.CAMPAIGN else " - " + Data.MODE_NAMES[battle.mode]), 3.5)
 
 
 func _build_top() -> void:
@@ -111,7 +111,7 @@ func _build_top() -> void:
 	right.add_theme_constant_override("separation", 8)
 	add_child(right)
 	_speed = Ui.button("x1", func():
-		battle.speed = battle.speed % 3 + 1, 18)
+		battle.speed = {1: 2, 2: 4, 4: 1}.get(battle.speed, 1), 18)
 	_speed.tooltip_text = "Game speed (Tab)"
 	_speed.custom_minimum_size = Vector2(64, 44)
 	_speed.add_theme_font_override("font", Game.font_bold)
@@ -168,7 +168,8 @@ func _process(dt: float) -> void:
 	_lives.text = str(battle.lives)
 	_lives.add_theme_color_override("font_color", Game.PALE if battle.lives > 8 else Color(1.0, 0.4, 0.35))
 	_mana.text = str(battle.mana)
-	_wave.text = "Wave %d / %d" % [battle.wave_i, battle.waves.size()]
+	var endless := battle.mode == Data.ENDLESS
+	_wave.text = "Wave %d" % battle.wave_i if endless else "Wave %d / %d" % [battle.wave_i, battle.waves.size()]
 	_speed.text = "x%d" % battle.speed
 	var left := battle.waves.size() - battle.wave_i
 	if left > 0 and battle.state != Battle.WON and battle.state != Battle.LOST:
@@ -190,12 +191,14 @@ func _process(dt: float) -> void:
 			c.queue_free()
 	if battle.wave_i != _last_wave:
 		if battle.wave_i > 0:
-			var last := battle.wave_i == battle.waves.size()
+			var last := battle.wave_i == battle.waves.size() and not endless
 			announce("Final wave" if last else "Wave %d" % battle.wave_i, 2.0)
 		_last_wave = battle.wave_i
 	if battle.boss and not _boss_seen:
 		_boss_seen = true
 		announce(battle.boss.def.name, 3.0)
+	elif battle.boss == null:
+		_boss_seen = false
 	for i in _spells.size():
 		var cd: float = battle.spell_cd[i]
 		var g: Ui.Glyph = _spell_cd[i]
@@ -234,7 +237,7 @@ func _fill_preview() -> void:
 func _update_panels() -> void:
 	var sel := battle.selected
 	var has_tower := sel >= 0 and battle.towers.has(sel)
-	var key: int = sel * 10 + (1 if has_tower else 0) + (0 if not has_tower else battle.towers[sel].level * 2 + 2)
+	var key: int = sel * 100 + (1 if has_tower else 0) + (0 if not has_tower else battle.towers[sel].level * 2 + 2)
 	if key != _shown_for:
 		_shown_for = key
 		_build.visible = false
@@ -320,7 +323,7 @@ func _open_build(pad: int) -> void:
 		var cl := Ui.label(str(d.cost[0]), 16, Color(0.75, 0.9, 1.0), Game.font_title_bold)
 		cost.add_child(cl)
 		col.add_child(cost)
-		var kl := Ui.label(str(key), 12, Color(0.7, 0.65, 0.55))
+		var kl := Ui.label(Game.BUILD_KEY_NAMES[key - 1] if key <= Game.BUILD_KEY_NAMES.size() else "", 12, Color(0.7, 0.65, 0.55))
 		kl.position = Vector2(6, 2)
 		b.add_child(kl)
 		grid.add_child(b)
@@ -356,11 +359,17 @@ func _stat_line(d: Dictionary, lv: int) -> String:
 	if d.has("root"):
 		s += ", roots %.1fs" % d.root[lv]
 	if d.has("multi") and d.multi[lv] > 1:
-		s += ", two targets"
+		s += ", %s targets" % ("two" if d.multi[lv] == 2 else "three")
 	if d.has("execute") and d.execute[lv] > 0.0:
 		s += ", finishes foes under %d%%" % int(d.execute[lv] * 100)
 	if d.has("burn"):
 		s += ", burns %d/s" % int(d.burn[lv])
+	if d.has("knock"):
+		s += ", throws foes back %.1f" % d.knock[lv]
+	if d.has("sunder"):
+		s += ", cracks armour and wards by %d%%" % int(d.sunder[lv] * 100)
+	if d.has("aura"):
+		s += ", heroes in range +%d%% damage and +%d%% speed" % [int(round(d.aura[lv] * 100)), int(round(d.aura[lv] * 50))]
 	if d.has("boss_bonus"):
 		s += ", +%d%% vs champions" % int(d.boss_bonus[lv] * 100)
 	if not d.air:
@@ -383,12 +392,15 @@ func _open_tower(pad: int) -> void:
 	var names := VBoxContainer.new()
 	names.add_child(Ui.label(t.def.name, 20, Game.GOLD, Game.font_title_bold))
 	var stars := HBoxContainer.new()
-	for i in 3:
+	for i in Tower.MAX_LEVEL + 1:
 		stars.add_child(Ui.icon("star" if i <= t.level else "star_empty", 18))
+	stars.add_child(Ui.label("  " + Data.LEVEL_NAMES[t.level], 14, Color(0.85, 0.8, 0.7)))
 	names.add_child(stars)
 	head.add_child(names)
 	_tower_box.add_child(head)
 	_tower_box.add_child(Ui.wrap(_stat_line(t.def, t.level), 15, Color(0.75, 0.9, 1.0), 290))
+	if t.buff > 0.0:
+		_tower_box.add_child(Ui.label("Rallied by the Warmarshal: +%d%%" % int(round(t.buff * 100.0)), 14, Color(1.0, 0.6, 0.45)))
 	if t.can_upgrade():
 		var up := Ui.button("UPGRADE  (%d)" % t.upgrade_cost(), func(): battle.upgrade(pad), 15)
 		up.name = "Upgrade"
@@ -429,7 +441,7 @@ func _unhandled_input(e: InputEvent) -> void:
 	if e.is_action_pressed("next_wave"):
 		battle.call_wave()
 	elif e.is_action_pressed("speed"):
-		battle.speed = battle.speed % 3 + 1
+		battle.speed = {1: 2, 2: 4, 4: 1}.get(battle.speed, 1)
 	elif e.is_action_pressed("spell1"):
 		battle.start_spell(0)
 	elif e.is_action_pressed("spell2"):
@@ -443,7 +455,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		t.mode = (t.mode + 1) % Tower.MODES.size()
 		_shown_for = -2
 	else:
-		for i in 8:
+		for i in Game.BUILD_KEYS.size():
 			if e.is_action_pressed("build%d" % (i + 1)) and battle.selected >= 0 and not battle.towers.has(battle.selected):
 				var heroes := Game.heroes_for(battle.plane)
 				if i < heroes.size() and battle.build(battle.selected, heroes[i]):

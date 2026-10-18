@@ -3,7 +3,7 @@ extends RefCounted
 ## Every hero tower and every Phyrexian, modelled in code with MeshKit. Models face -Z.
 ##
 ## tower(id, level) returns {base: Mesh, figure: Mesh, arm: Mesh, arm_pivot, fig_y, orbit: Mesh or
-## null, muzzle} : the base stands on the pad, the figure turns towards its target and the arm
+## null, muzzle, crown (levels 4 and 5 only)} : the base stands on the pad, the figure turns towards its target and the arm
 ## (pivoting at the shoulder) swings when it attacks. orbit spins slowly around the figure.
 ## enemy(kind) returns {body: Mesh, limbs: [{mesh, pivot, kind}], fly}: limbs are legs ("leg",
 ## swing about X), wings ("wing", flap about Z) and the like, animated by Enemy.
@@ -174,15 +174,22 @@ static func tower(id: String, level: int) -> Dictionary:
 	var key := "%s%d" % [id, level]
 	if not _towers.has(key):
 		var d: Dictionary
-		match id:
-			"champion": d = _t_champion(level)
-			"ember": d = _t_ember(level)
-			"sage": d = _t_sage(level)
-			"ninja": d = _t_ninja(level)
-			"litho": d = _t_litho(level)
-			"dragon": d = _t_dragon(level)
-			"ghost": d = _t_ghost(level)
-			_: d = _t_grove(level)
+		if level >= 3:
+			d = tower(id, 2).duplicate()
+			d.crown = _crown(level, Data.TOWERS[id].color, d.fig_y - 0.02)
+		else:
+			match id:
+				"champion": d = _t_champion(level)
+				"ember": d = _t_ember(level)
+				"sage": d = _t_sage(level)
+				"ninja": d = _t_ninja(level)
+				"litho": d = _t_litho(level)
+				"tide": d = _t_tide(level)
+				"dragon": d = _t_dragon(level)
+				"marshal": d = _t_marshal(level)
+				"ghost": d = _t_ghost(level)
+				"raptor": d = _t_raptor(level)
+				_: d = _t_grove(level)
 		_towers[key] = d
 	return _towers[key]
 
@@ -653,6 +660,296 @@ static func _t_grove(lv: int) -> Dictionary:
 	a.sphere(Vector3(0.12, -0.3, -0.12) * s, Vector3(0.1, 0.07, 0.1), moss, 8, 5)
 	return {"base": b.commit(), "figure": f.commit(), "arm": a.commit(), "arm_pivot": Vector3(0.3, 1.0, 0) * s,
 		"fig_y": 0.22, "orbit": null, "orbit_spin": 0.0, "muzzle": Vector3(0, 0.3, 0)}
+
+
+## Levels 4 and 5 keep the level 3 hero and add a slowly turning crown of light around the
+## tower: a gold ring with runes and floating gems in the hero's colour; Legendary adds a second,
+## tilted ring, more gems and a halo of rays.
+static func _crown(lv: int, col: Color, y: float) -> Mesh:
+	var m := MeshKit.new()
+	var r := 1.02
+	m.ring(Vector3(0, y, 0), Vector3.UP, r, 0.03, GOLD.lightened(0.15), 40, 4)
+	m.ring(Vector3(0, y, 0), Vector3.UP, r - 0.06, 0.012, col, 40, 3, true)
+	for k in 16:
+		var a := TAU * k / 16.0
+		m.box(Vector3(cos(a) * (r + 0.035), y, sin(a) * (r + 0.035)), Vector3(0.05, 0.05, 0.015), col.lightened(0.3), true, -a + PI * 0.5)
+	var gems := 3 if lv == 3 else 6
+	for k in gems:
+		var a := TAU * k / gems + 0.3
+		var p := Vector3(cos(a) * (r + 0.1), y + 0.75 + (k % 2) * 0.25, sin(a) * (r + 0.1))
+		_gem(m, p, 0.07, 0.15, col.lightened(0.2), true, a)
+		m.ring(p, Vector3.UP, 0.12, 0.01, GOLD, 12, 3)
+	if lv >= 4:
+		m.ring(Vector3(0, y + 1.0, 0), Vector3(0.35, 1, 0.2).normalized(), r * 0.92, 0.02, GOLD.lightened(0.2), 40, 4)
+		m.ring(Vector3(0, y + 1.0, 0), Vector3(0.35, 1, 0.2).normalized(), r * 0.86, 0.01, col, 40, 3, true)
+		for k in 12:
+			var a := TAU * k / 12.0
+			var d := Vector3(cos(a), 0, sin(a))
+			m.cyl(d * (r + 0.05) + Vector3(0, y + 0.02, 0), d * (r + 0.28) + Vector3(0, y + 0.02, 0), 0.025, 0.0, col.lightened(0.4), 4, true)
+	return m.commit()
+
+
+static func _t_tide(lv: int) -> Dictionary:
+	# base: a sea stack of dark rock crusted with coral and shells, a glowing tide pool on top
+	var b := MeshKit.new()
+	var rock := Color(0.27, 0.33, 0.36)
+	var coral := Color(0.95, 0.45, 0.42)
+	var h := 0.8 + lv * 0.17
+	b.cyl(Vector3.ZERO, Vector3(0, 0.22, 0), 0.98, 0.9, rock.darkened(0.2), 12, false)
+	b.cyl(Vector3(0, 0.22, 0), Vector3(0, h, 0), 0.78, 0.68, rock, 12, false)
+	for k in 7:
+		var a := TAU * k / 7.0 + 0.4
+		b.rock(Vector3(cos(a) * 0.75, 0.2 + (k % 3) * h * 0.25, sin(a) * 0.75), Vector3(0.2, 0.16, 0.2), rock.lightened(0.08), k + 11)
+	for k in 6 + lv * 2:
+		var a := TAU * k / (6 + lv * 2) + 0.1
+		var d := Vector3(cos(a), 0, sin(a))
+		var p := d * 0.7 + Vector3(0, 0.3 + (k % 4) * h * 0.18, 0)
+		for c in 3:
+			var tip := p + d * 0.12 + Vector3(sin(c * 2.1) * 0.06, 0.16 + c * 0.03, cos(c * 1.7) * 0.06)
+			b.cyl(p, tip, 0.03, 0.012, coral if k % 2 else Color(1.0, 0.7, 0.35), 5)
+	b.cyl(Vector3(0, h, 0), Vector3(0, h + 0.1, 0), 0.8, 0.8, rock.lightened(0.05), 14)
+	b.gloss = true
+	b.cyl(Vector3(0, h + 0.09, 0), Vector3(0, h + 0.11, 0), 0.68, 0.68, Color(0.08, 0.36, 0.52), 18)
+	b.gloss = false
+	b.ring(Vector3(0, h + 0.115, 0), Vector3.UP, 0.4, 0.012, Color(0.45, 0.85, 1.0), 24, 3, true)
+	b.ring(Vector3(0, h + 0.115, 0), Vector3.UP, 0.58, 0.01, Color(0.45, 0.85, 1.0), 28, 3, true)
+	for k in 5:
+		var a := TAU * k / 5.0 + 1.0
+		b.sphere(Vector3(cos(a) * 0.74, h + 0.12, sin(a) * 0.74), Vector3(0.07, 0.05, 0.07), Color(0.95, 0.88, 0.78), 8, 4)
+	if lv >= 1:
+		# leviathan tentacles rising out of the pool behind her
+		for k in (2 if lv == 1 else 4):
+			var a := PI * 0.5 + (k - (0.5 if lv == 1 else 1.5)) * 0.7
+			var base_p := Vector3(cos(a) * 0.6, h + 0.1, sin(a) * 0.6)
+			var prev := base_p
+			for s in 8:
+				var t := (s + 1) / 8.0
+				var p := base_p + Vector3(cos(a) * 0.15 * sin(t * 3.0), t * (0.9 + lv * 0.15), sin(a) * 0.15 * sin(t * 3.0) + 0.1 * t)
+				b.cyl(prev, p, 0.09 * (1.0 - t * 0.8) + 0.01, 0.09 * (1.0 - (t + 0.12) * 0.8) + 0.01, Color(0.18, 0.4, 0.55) if s % 2 else Color(0.22, 0.48, 0.62), 8)
+				prev = p
+	# figure: a sea-singer with blue-green skin, coral armour and tentacle hair
+	var f := MeshKit.new()
+	var skin := Color(0.45, 0.72, 0.78)
+	_legs(f, 0.5, 0.08, 0.06, Color(0.2, 0.35, 0.45), Color(0.15, 0.25, 0.32))
+	_body(f, [[0.44, 0.17, 0.12], [0.6, 0.16, 0.11], [0.78, 0.18, 0.12], [0.92, 0.2, 0.13], [1.0, 0.12, 0.09], [1.03, 0.06, 0.06]], Color(0.12, 0.4, 0.5), 14)
+	_body(f, [[0.3, 0.2, 0.17], [0.47, 0.17, 0.13]], Color(0.1, 0.3, 0.4), 12)
+	f.gloss = true
+	for k in 5:
+		var a := -PI * 0.5 + (k - 2) * 0.35
+		f.sphere(Vector3(cos(a) * 0.15, 0.82 - abs(k - 2) * 0.04, sin(a) * 0.11), Vector3(0.05, 0.07, 0.03), coral, 8, 4)
+	f.gloss = false
+	f.ring(Vector3(0, 0.58, 0), Vector3.UP, 0.165, 0.02, Color(0.95, 0.88, 0.78), 14, 4)
+	_head(f, Vector3(0, 1.13, 0), 0.11, skin)
+	# tentacle hair falling down her back
+	for k in 7:
+		var a := PI * 0.5 + (k - 3) * 0.32
+		var p := Vector3(cos(a) * 0.08, 1.2, sin(a) * 0.08)
+		var prev := p
+		for s in 5:
+			var t := (s + 1) / 5.0
+			var q := p + Vector3(cos(a) * 0.08 * t, -0.42 * t, sin(a) * 0.05 + 0.12 * t)
+			f.cyl(prev, q, 0.03 * (1.0 - t * 0.6), 0.03 * (1.0 - (t + 0.2) * 0.6), Color(0.2, 0.55, 0.62).lerp(coral, t * 0.5), 6)
+			prev = q
+	f.sphere(Vector3(0, 1.2, 0.02), Vector3(0.11, 0.07, 0.11), Color(0.2, 0.55, 0.62), 10, 6)
+	_gem(f, Vector3(0, 1.26, -0.08), 0.035, 0.05, Color(0.5, 0.95, 1.0), true)
+	f.cyl(Vector3(-0.24, 0.94, 0), Vector3(-0.3, 0.68, -0.08), 0.05, 0.045, skin, 8)
+	f.sphere(Vector3(-0.31, 0.64, -0.1), Vector3(0.045, 0.05, 0.045), skin, 8, 5)
+	f.sphere(Vector3(-0.31, 0.7, -0.14), Vector3(0.07, 0.07, 0.07), Color(0.4, 0.85, 1.0), 10, 6, true)
+	var a := MeshKit.new()
+	var hand := _arm(a, 0.4, 0.05, Color(0.12, 0.4, 0.5), skin)
+	# a two-pronged coral spear
+	a.cyl(hand + Vector3(0, -0.3, 0.1), hand + Vector3(0, 0.6, -0.25), 0.02, 0.02, Color(0.85, 0.8, 0.7), 6)
+	var top := hand + Vector3(0, 0.6, -0.25)
+	for s in [-1.0, 1.0]:
+		a.cyl(top, top + Vector3(s * 0.08, 0.06, -0.02), 0.018, 0.015, coral, 5)
+		a.cyl(top + Vector3(s * 0.08, 0.06, -0.02), top + Vector3(s * 0.08, 0.24, -0.08), 0.015, 0.0, coral.lightened(0.15), 5)
+	a.sphere(top, Vector3(0.04, 0.04, 0.04), Color(0.5, 0.95, 1.0), 8, 4, true)
+	var orbit: Mesh = null
+	if lv >= 2:
+		var o := MeshKit.new()
+		for k in 14:
+			var ang := TAU * k / 14.0
+			o.sphere(Vector3(cos(ang) * 0.55, 0.55 + sin(ang * 3.0) * 0.08, sin(ang) * 0.55), Vector3(0.05, 0.07, 0.05), Color(0.45, 0.85, 1.0), 6, 4, true)
+		o.ring(Vector3(0, 0.55, 0), Vector3.UP, 0.55, 0.012, Color(0.6, 0.95, 1.0), 32, 3, true)
+		orbit = o.commit()
+	return {"base": b.commit(), "figure": f.commit(), "arm": a.commit(), "arm_pivot": Vector3(0.24, 0.95, 0),
+		"fig_y": h + 0.11, "orbit": orbit, "orbit_spin": -0.9, "muzzle": Vector3(0.3, 1.5, -0.35)}
+
+
+static func _t_marshal(lv: int) -> Dictionary:
+	# base: a red stone legion keep with gold bands, big war banners and battlements
+	var b := MeshKit.new()
+	var stone := Color(0.62, 0.3, 0.24)
+	var red := Color(0.72, 0.12, 0.1)
+	var h := 0.95 + lv * 0.18
+	b.taper(Vector3.ZERO, Vector2(1.8, 1.8), Vector2(1.6, 1.6), 0.2, stone.darkened(0.25), false, PI * 0.25)
+	b.cyl(Vector3(0, 0.2, 0), Vector3(0, h, 0), 0.78, 0.7, stone, 8, false, false)
+	b.cyl(Vector3(0, h, 0), Vector3(0, h + 0.1, 0), 0.82, 0.82, stone.lightened(0.08), 8)
+	for k in 2 + lv:
+		b.ring(Vector3(0, 0.3 + k * (h - 0.35) / (1.5 + lv), 0), Vector3.UP, 0.76 - k * 0.02, 0.03, GOLD, 8, 4)
+	_crenels(b, h + 0.1, 0.75, 8, stone.lightened(0.05), 0.18)
+	b.box(Vector3(0, 0.38, -0.74), Vector3(0.34, 0.52, 0.1), Color(0.2, 0.12, 0.1))
+	b.cyl(Vector3(0, 0.64, -0.74), Vector3(0, 0.64, -0.8), 0.17, 0.17, Color(0.2, 0.12, 0.1), 8)
+	for k in (2 if lv == 0 else (3 if lv == 1 else 4)):
+		var a := PI * 0.5 + TAU * k / (2 if lv == 0 else (3 if lv == 1 else 4))
+		var d := Vector3(cos(a), 0, sin(a))
+		_banner(b, d * 0.74 + Vector3(0, h - 0.05, 0), d, 0.6 + lv * 0.06, red, Color(1.0, 0.82, 0.35))
+	# figure: red and gold plate, a plumed helm and the great war banner in her left hand
+	var f := MeshKit.new()
+	f.gloss = true
+	_legs(f, 0.5, 0.09, 0.07, Color(0.65, 0.18, 0.12), GOLD.darkened(0.2))
+	_body(f, [[0.44, 0.18, 0.13], [0.55, 0.19, 0.14], [0.72, 0.21, 0.15], [0.88, 0.25, 0.17], [0.97, 0.18, 0.13], [1.02, 0.07, 0.07]], Color(0.7, 0.16, 0.11), 14)
+	f.gloss = false
+	_body(f, [[0.28, 0.21, 0.17], [0.47, 0.18, 0.14]], GOLD.darkened(0.15), 10)
+	f.ring(Vector3(0, 0.56, 0), Vector3.UP, 0.2, 0.025, GOLD, 14, 4)
+	# a gold sun-wing on the breastplate
+	for s in [-1.0, 1.0]:
+		f.tri(Vector3(0, 0.84, -0.17), Vector3(s * 0.16, 0.9, -0.14), Vector3(s * 0.1, 0.78, -0.155), Color(1.0, 0.82, 0.35), true)
+	for s in [-1.0, 1.0]:
+		f.gloss = true
+		f.sphere(Vector3(s * 0.26, 0.94, 0), Vector3(0.13, 0.1, 0.13), Color(0.7, 0.16, 0.11), 10, 6)
+		f.gloss = false
+		f.ring(Vector3(s * 0.26, 0.92, 0), Vector3.UP, 0.12, 0.02, GOLD, 12, 4)
+	_head(f, Vector3(0, 1.13, 0), 0.115, Color(0.62, 0.42, 0.3))
+	f.gloss = true
+	f.sphere(Vector3(0, 1.17, 0.0), Vector3(0.125, 0.1, 0.125), GOLD, 12, 6)
+	f.gloss = false
+	# helm crest
+	for k in 6:
+		var t := k / 5.0
+		f.box(Vector3(0, 1.28 + sin(t * PI) * 0.04, -0.06 + t * 0.22), Vector3(0.03, 0.08, 0.05), Color(0.95, 0.2, 0.12))
+	_cloth(f, [Vector3(-0.23, 0.97, 0.12), Vector3(0, 0.99, 0.16), Vector3(0.23, 0.97, 0.12)], Vector3(0, -0.85, 0.24), 0.2, red)
+	# the war banner: a tall pole, a gold crossbar and a long red standard
+	var pole_b := Vector3(-0.32, 0.1, -0.05)
+	var pole_t := Vector3(-0.32, 1.95 + lv * 0.08, -0.05)
+	f.cyl(Vector3(-0.27, 0.92, 0), Vector3(-0.32, 0.7, -0.05), 0.055, 0.05, Color(0.7, 0.16, 0.11), 8)
+	f.cyl(pole_b, pole_t, 0.022, 0.02, Color(0.35, 0.22, 0.12), 6)
+	f.cyl(pole_t + Vector3(-0.2, -0.05, 0), pole_t + Vector3(0.2, -0.05, 0), 0.015, 0.015, GOLD, 5)
+	_gem(f, pole_t + Vector3(0, 0.08, 0), 0.045, 0.1, Color(1.0, 0.85, 0.4), true)
+	_cloth(f, [pole_t + Vector3(-0.2, -0.07, 0), pole_t + Vector3(0, -0.07, 0), pole_t + Vector3(0.2, -0.07, 0)], Vector3(0, -0.75, 0.05), 0.04, red, 6)
+	f.sphere(pole_t + Vector3(0, -0.4, -0.012), Vector3(0.09, 0.09, 0.01), Color(1.0, 0.82, 0.35), 10, 4, true)
+	var a := MeshKit.new()
+	a.gloss = true
+	var hand := _arm(a, 0.42, 0.055, Color(0.7, 0.16, 0.11), GOLD)
+	a.gloss = false
+	a.cyl(hand + Vector3(0, -0.2, 0.08), hand + Vector3(0, 0.55, -0.22), 0.02, 0.02, Color(0.35, 0.22, 0.12), 6)
+	_gem(a, hand + Vector3(0, 0.66, -0.26), 0.04, 0.12, Color(1.0, 0.75, 0.35), true)
+	var orbit: Mesh = null
+	if lv >= 2:
+		var o := MeshKit.new()
+		for k in 6:
+			var ang := TAU * k / 6.0
+			var p := Vector3(cos(ang) * 0.6, 0.35, sin(ang) * 0.6)
+			o.cyl(p, p + Vector3(0, 0.45, 0), 0.012, 0.012, GOLD, 4)
+			_cloth(o, [p + Vector3(0, 0.44, 0), p + Vector3(-sin(ang) * 0.08, 0.44, cos(ang) * 0.08), p + Vector3(-sin(ang) * 0.16, 0.44, cos(ang) * 0.16)], Vector3(0, -0.2, 0), 0.0, Color(0.9, 0.2, 0.12), 3)
+		orbit = o.commit()
+	return {"base": b.commit(), "figure": f.commit(), "arm": a.commit(), "arm_pivot": Vector3(0.27, 0.93, 0),
+		"fig_y": h + 0.1, "orbit": orbit, "orbit_spin": 0.35, "muzzle": Vector3(0.3, 1.45, -0.3)}
+
+
+static func _t_raptor(lv: int) -> Dictionary:
+	# base: a stepped sun temple of gold-brown stone with turquoise inlay and a sun disc
+	var b := MeshKit.new()
+	var stone := Color(0.72, 0.6, 0.42)
+	var jade := Color(0.2, 0.75, 0.65)
+	var steps := 3 + mini(lv, 2)
+	var h := 0.0
+	for k in steps:
+		var w := 1.85 - k * 0.24
+		var sh := 0.2 + lv * 0.02
+		b.taper(Vector3(0, h, 0), Vector2(w, w), Vector2(w - 0.06, w - 0.06), sh, stone.darkened(0.06 * (steps - k)))
+		for side in 4:
+			var a := TAU * side / 4.0
+			var d := Vector3(cos(a), 0, sin(a))
+			b.box(d * (w * 0.5 - 0.02) + Vector3(0, h + sh * 0.5, 0), Vector3(w * 0.7, 0.04, 0.02), jade, false, -a + PI * 0.5)
+		h += sh
+	# stairs on the front
+	for k in steps * 2:
+		b.box(Vector3(0, k * h / (steps * 2) + 0.05, -0.95 + k * 0.07), Vector3(0.36, 0.06, 0.1), stone.lightened(0.05))
+	b.ring(Vector3(0, h + 0.6, 0.55), Vector3(0, 0, 1), 0.32 + lv * 0.03, 0.04, GOLD, 24, 4)
+	b.cyl(Vector3(0, h + 0.6, 0.57), Vector3(0, h + 0.6, 0.6), 0.28 + lv * 0.03, 0.28 + lv * 0.03, Color(1.0, 0.78, 0.3), 20, true)
+	for k in 12:
+		var ang := TAU * k / 12.0
+		var d := Vector3(cos(ang), sin(ang), 0)
+		b.cyl(Vector3(0, h + 0.6, 0.58) + d * (0.34 + lv * 0.03), Vector3(0, h + 0.6, 0.58) + d * (0.5 + lv * 0.04), 0.03, 0.0, GOLD, 4)
+	b.cyl(Vector3(0, h, 0.55), Vector3(0, h + 0.3, 0.55), 0.05, 0.05, stone, 6)
+	# figure: a big feathered raptor with its rider on its back (the raptor is drawn at scale k)
+	var f := MeshKit.new()
+	var hide := Color(0.36, 0.5, 0.22)
+	var belly := Color(0.85, 0.72, 0.45)
+	var stripe := Color(0.9, 0.45, 0.12)
+	var teal := Color(0.25, 0.7, 0.6)
+	var ks := 1.55
+	var rows := []
+	for pr in [[0.5, 0.0, 0.0, 0.05], [0.35, 0.11, 0.12, 0.02], [0.12, 0.17, 0.19, 0.0], [-0.12, 0.15, 0.17, 0.05], [-0.25, 0.09, 0.11, 0.14]]:
+		rows.append([pr[0] * ks, pr[1] * ks, pr[2] * ks, pr[3] * ks])
+	_hbody(f, rows, 0.55 * ks, func(t, a, _c, _n): return belly if a > 0.6 and a < 0.9 else (stripe if int(t * 8.0) % 3 == 0 else hide), 14)
+	# legs: strong thighs, thin shins, big sickle claws
+	for sd in [-1.0, 1.0]:
+		f.cyl(Vector3(sd * 0.12, 0.55, 0.12) * ks, Vector3(sd * 0.15, 0.32, 0.02) * ks, 0.08 * ks, 0.05 * ks, hide, 8)
+		f.cyl(Vector3(sd * 0.15, 0.32, 0.02) * ks, Vector3(sd * 0.15, 0.06, 0.12) * ks, 0.04 * ks, 0.03 * ks, hide.darkened(0.15), 6)
+		f.box(Vector3(sd * 0.15, 0.03, 0.04) * ks, Vector3(0.08, 0.05, 0.16) * ks, hide.darkened(0.3))
+		f.cyl(Vector3(sd * 0.15, 0.07, 0.0) * ks, Vector3(sd * 0.15, 0.13, -0.09) * ks, 0.018 * ks, 0.0, Color(0.95, 0.9, 0.8), 4)
+		f.cyl(Vector3(sd * 0.12, 0.6, -0.2) * ks, Vector3(sd * 0.14, 0.5, -0.3) * ks, 0.025 * ks, 0.018 * ks, hide, 5)
+		for c in 2:
+			f.cyl(Vector3(sd * 0.14, 0.5, -0.3) * ks, Vector3(sd * (0.13 + c * 0.03), 0.46, -0.34) * ks, 0.01 * ks, 0.0, Color(0.95, 0.9, 0.8), 4)
+	# neck and head, mouth a little open
+	f.cyl(Vector3(0, 0.65, -0.22) * ks, Vector3(0, 0.82, -0.38) * ks, 0.08 * ks, 0.06 * ks, hide, 10)
+	f.sphere(Vector3(0, 0.86, -0.45) * ks, Vector3(0.07, 0.07, 0.1) * ks, hide, 12, 6)
+	f.taper(Vector3(0, 0.84, -0.5) * ks, Vector2(0.09, 0.08) * ks, Vector2(0.05, 0.04) * ks, 0.05 * ks, hide, false, 0.0, Vector3(0, -0.01, -0.12) * ks)
+	f.taper(Vector3(0, 0.78, -0.5) * ks, Vector2(0.08, 0.07) * ks, Vector2(0.04, 0.03) * ks, 0.03 * ks, belly, false, 0.0, Vector3(0, -0.03, -0.1) * ks)
+	for t in 5:
+		f.cyl(Vector3(-0.03 + t * 0.015, 0.81, -0.52 - t * 0.02) * ks, Vector3(-0.03 + t * 0.015, 0.79, -0.52 - t * 0.02) * ks, 0.006 * ks, 0.0, Color(0.98, 0.95, 0.85), 3)
+	for sd in [-1.0, 1.0]:
+		f.sphere(Vector3(sd * 0.05, 0.89, -0.49) * ks, Vector3(0.018, 0.015, 0.018) * ks, Color(1.0, 0.8, 0.2), 6, 3, true)
+	# feather crest down the neck, a fan of tail feathers
+	for t in 6:
+		var z := -0.42 + t * 0.08
+		f.cyl(Vector3(0, 0.9 - t * 0.04, z) * ks, Vector3(0, 1.02 - t * 0.05, z + 0.08) * ks, 0.03 * ks, 0.0, stripe if t % 2 else teal, 4)
+	for t in 7:
+		var ang := (t - 3) * 0.2
+		f.cyl(Vector3(0, 0.56, 0.48) * ks, Vector3(sin(ang) * 0.22, 0.64, 0.82) * ks, 0.045 * ks, 0.0, stripe if t % 2 else teal, 4)
+	# saddle cloth
+	var sy := 0.76 * ks
+	f.box(Vector3(0, sy, 0.05 * ks), Vector3(0.26, 0.05, 0.3) * ks, Color(0.55, 0.18, 0.12))
+	_cloth(f, [Vector3(-0.2 * ks, sy, -0.05), Vector3(-0.2 * ks, sy, 0.1 * ks), Vector3(-0.2 * ks, sy, 0.25 * ks)], Vector3(-0.03, -0.25, 0), 0.0, Color(0.85, 0.6, 0.15), 3)
+	_cloth(f, [Vector3(0.2 * ks, sy, 0.25 * ks), Vector3(0.2 * ks, sy, 0.1 * ks), Vector3(0.2 * ks, sy, -0.05)], Vector3(0.03, -0.25, 0), 0.0, Color(0.85, 0.6, 0.15), 3)
+	# the rider
+	var ry := sy - 0.76
+	var skin := Color(0.62, 0.42, 0.3)
+	for sd in [-1.0, 1.0]:
+		f.cyl(Vector3(sd * 0.09, 0.82 + ry, 0.05), Vector3(sd * 0.24, 0.68 + ry, -0.02), 0.045, 0.035, teal.darkened(0.15), 6)
+		f.cyl(Vector3(sd * 0.24, 0.68 + ry, -0.02), Vector3(sd * 0.24, 0.5 + ry, 0.04), 0.035, 0.03, skin, 6)
+	_body(f, [[0.8 + ry, 0.12, 0.09], [0.95 + ry, 0.13, 0.09], [1.1 + ry, 0.16, 0.1], [1.18 + ry, 0.11, 0.08], [1.22 + ry, 0.05, 0.05]], teal.darkened(0.15), 12, 0.0)
+	f.ring(Vector3(0, 0.98 + ry, 0), Vector3.UP, 0.13, 0.02, GOLD, 12, 3)
+	f.box(Vector3(0, 1.08 + ry, -0.1), Vector3(0.14, 0.05, 0.015), Color(1.0, 0.75, 0.3), true)
+	_head(f, Vector3(0, 1.32 + ry, 0), 0.1, skin)
+	f.sphere(Vector3(0, 1.37 + ry, 0.03), Vector3(0.1, 0.07, 0.1), Color(0.12, 0.08, 0.06), 10, 6)
+	f.cyl(Vector3(0, 1.35 + ry, 0.08), Vector3(0, 1.05 + ry, 0.14), 0.04, 0.02, Color(0.12, 0.08, 0.06), 6)
+	# a gold sun circlet with tall feathers
+	f.ring(Vector3(0, 1.38 + ry, 0), Vector3.UP, 0.1, 0.015, GOLD, 12, 3)
+	for t in 3:
+		f.cyl(Vector3((t - 1) * 0.04, 1.4 + ry, 0.06), Vector3((t - 1) * 0.07, 1.6 + ry, 0.12), 0.02, 0.0, stripe if t == 1 else teal, 4)
+	# round sun shield on the left arm
+	f.cyl(Vector3(-0.16, 1.14 + ry, 0), Vector3(-0.22, 0.95 + ry, -0.12), 0.04, 0.035, teal.darkened(0.15), 6)
+	f.ring(Vector3(-0.26, 0.95 + ry, -0.15), Vector3(1, 0, 0), 0.13, 0.015, GOLD, 16, 3)
+	f.cyl(Vector3(-0.255, 0.95 + ry, -0.15), Vector3(-0.27, 0.95 + ry, -0.15), 0.12, 0.12, Color(0.85, 0.55, 0.2), 14)
+	f.sphere(Vector3(-0.275, 0.95 + ry, -0.15), Vector3(0.01, 0.05, 0.05), Color(1.0, 0.85, 0.35), 8, 4, true)
+	var a := MeshKit.new()
+	var hand := _arm(a, 0.36, 0.045, teal.darkened(0.15), skin)
+	a.cyl(hand + Vector3(0, -0.25, 0.1), hand + Vector3(0, 0.45, -0.2), 0.016, 0.016, Color(0.55, 0.38, 0.2), 5)
+	a.cyl(hand + Vector3(0, 0.45, -0.2), hand + Vector3(0, 0.6, -0.27), 0.04, 0.0, Color(1.0, 0.8, 0.3), 5, true)
+	var orbit: Mesh = null
+	if lv >= 2:
+		var o := MeshKit.new()
+		for k in 8:
+			var ang := TAU * k / 8.0
+			var p := Vector3(cos(ang) * 0.7, 0.3, sin(ang) * 0.7)
+			o.cyl(p, p + Vector3(cos(ang) * 0.08, 0.3, sin(ang) * 0.08), 0.03, 0.0, Color(1.0, 0.8, 0.3), 4, true)
+		o.ring(Vector3(0, 0.3, 0), Vector3.UP, 0.7, 0.012, Color(1.0, 0.75, 0.3), 32, 3, true)
+		orbit = o.commit()
+	return {"base": b.commit(), "figure": f.commit(), "arm": a.commit(), "arm_pivot": Vector3(0.16, 1.14 + ry, 0),
+		"fig_y": h, "orbit": orbit, "orbit_spin": 0.5, "muzzle": Vector3(0.2, 1.7 + ry, -0.3)}
 
 
 # --- Phyrexians --------------------------------------------------------------------------

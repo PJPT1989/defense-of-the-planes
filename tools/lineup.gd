@@ -1,5 +1,5 @@
 extends Node3D
-## Model check: every hero at all three levels and every Phyrexian in rows, screenshots in
+## Model check: every hero at all five levels and every Phyrexian in rows, screenshots in
 ## /tmp/dotp-lineup.   xvfb-run -a godot --path . --rendering-driver opengl3 -- --lineup
 
 func _ready() -> void:
@@ -27,7 +27,7 @@ func _ready() -> void:
 	add_child(ground)
 	var x := 0.0
 	for id in Data.TOWER_ORDER:
-		for lv in 3:
+		for lv in 5:
 			var m: Dictionary = Models.tower(id, lv)
 			var root := Node3D.new()
 			root.position = Vector3(x, 0, lv * 2.6)
@@ -41,13 +41,15 @@ func _ready() -> void:
 			_mi(fig, m.arm, m.arm_pivot)
 			if m.orbit:
 				_mi(fig, m.orbit, Vector3.ZERO)
+			if m.get("crown"):
+				_mi(root, m.crown, Vector3.ZERO)
 		x += 2.4
 	var kinds := Data.ENEMIES.keys()
 	x = 0.0
 	for k in kinds:
 		var e: Dictionary = Models.enemy(k)
 		var root := Node3D.new()
-		root.position = Vector3(x, e.fly, 9.0)
+		root.position = Vector3(x, e.fly, 16.0)
 		root.rotation.y = PI + 0.6
 		add_child(root)
 		_mi(root, e.body, Vector3.ZERO)
@@ -61,7 +63,8 @@ func _ready() -> void:
 	var shots := "/tmp/dotp-lineup"
 	DirAccess.make_dir_recursive_absolute(shots)
 	await get_tree().process_frame
-	var views := [[Vector3(4, 4.5, -3.5), Vector3(3.5, 1.0, 3)], [Vector3(13.5, 4.5, -3.5), Vector3(13, 1.0, 3)], [Vector3(6, 3.2, 3.5), Vector3(6, 0.6, 9)], [Vector3(16, 4.0, 3.0), Vector3(16, 1.0, 9)], [Vector3(8.5, 14, -6), Vector3(8.5, 0, 5)]]
+	var views := [[Vector3(4, 4.5, -3.5), Vector3(3.5, 1.0, 3)], [Vector3(13.5, 4.5, -3.5), Vector3(13, 1.0, 3)], [Vector3(6, 3.2, 10.5), Vector3(6, 0.6, 16)], [Vector3(16, 4.0, 10.0), Vector3(16, 1.0, 16)], [Vector3(12, 22, -8), Vector3(12, 0, 6)],
+		[Vector3(14.4, 3.6, -2.5), Vector3(14.4, 1.0, 2.6)], [Vector3(22.8, 3.6, -2.5), Vector3(22.8, 1.0, 2.6)], [Vector3(6, 7, 3.5), Vector3(6, 1.0, 9)], [Vector3(18, 7, 3.5), Vector3(18, 1.0, 9)]]
 	for i in views.size():
 		cam.position = views[i][0]
 		cam.look_at(views[i][1])

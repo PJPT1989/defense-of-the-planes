@@ -21,3 +21,24 @@ levels as Aether Drift, and a page in the shop's Hry section.
 - Title screen with a live demo battle, campaign map with stars, Codex, how to play, results.
 - Balance checked with a simulated player (`--simtest`) that wins every plane; the finale is the
   hardest. All art is generated in code.
+
+## Round 2: a bigger late game
+**Request (Petr):** "Introduce option to have more waves in a map and also more tower upgrades
+and/or more tower types so that game can scale into bigger lategame"
+
+**Built:**
+- Two new modes on every open plane: **Long Siege** (twice the waves, the boss halfway and a much
+  stronger one at the end) and **Endless** (a boss every ten waves, cycling through all three, each
+  tougher; the record of waves held is saved per plane). Past the campaign's length every foe joins
+  in, more special groups come, groups that would outgrow their size cap get tougher foes instead
+  (paying a little more mana, though late bounties are cut to 55%), and every wave hardens by 6% on top of the usual growth.
+- Two more hero levels, **Exalted** and **Legendary** (five in all), each about +50% damage, with
+  longer range and bigger effects (the ninja throws at three targets, the dragon's lightning jumps
+  to nine). They cost two and three times the third level, so they are a late-game mana sink.
+  Levels 4 and 5 add a turning crown of gold rings, runes and gems around the tower.
+- Three new heroes (eleven in all): the **Tidecaller** (Zendikar; waves that throw foes back up
+  the road), the **Legion Warmarshal** (Ravnica; a banner that makes other heroes in range hit
+  harder and faster) and the **Sun-Rider** (Kaldheim; javelins thrown from a raptor that crack
+  armour and wards). Build keys are now 1-9, 0 and -.
+- Game speed x4, Halo Burst grows with the waves, the simulated player weighs damage types against
+  the coming waves, and `--simtest --mode=1|2` plays the long modes.

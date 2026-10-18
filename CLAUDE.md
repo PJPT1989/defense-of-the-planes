@@ -11,15 +11,17 @@ imported with its `tools/game_import.py`).
 ## Running and testing (cloud or Linux)
 - `tools/setup_godot.sh` installs Godot 4.3 as `~/.local/bin/godot` and imports the project (the
   SessionStart hook in `.claude/settings.json` runs it in cloud sessions).
-- `godot --headless --path . -- --simtest [--plane=N] [--verbose]` plays every plane with the
-  autoplay bot without rendering and prints the result. Run it after any balance, wave or hero
-  change; the bot must win every plane. `--verbose` prints each wave and the boss's life.
+- `godot --headless --path . -- --simtest [--plane=N] [--mode=0|1|2] [--verbose]` plays every plane
+  with the autoplay bot without rendering and prints the result (mode 0 campaign, 1 Long Siege,
+  2 Endless). Run it after any balance, wave or hero change; the bot must win every campaign plane.
+  `--verbose` prints each wave and the boss's life. Long modes take minutes per plane.
 - `godot --headless --path . -- --waves` lists the generated waves of every plane.
 - `tools/smoke_test.sh [dir]` runs `scripts/autotest.gd` under `xvfb-run`: title, campaign, codex,
   every plane, build menu, hero panel, bosses, pause and a full win. Look at the PNGs (default
   `/tmp/dotp-shots`). A good run ends with `AUTOTEST done` and has no `SCRIPT ERROR`.
 - `xvfb-run -a godot --path . --rendering-driver opengl3 -- --lineup` renders every model
-  (screenshots in `/tmp/dotp-lineup`).
+  (screenshots in `/tmp/dotp-lineup`); `-- --heroes=tide,marshal,raptor` renders close-ups of some
+  heroes at levels 1, 3 and 5 from the game's camera angle (`/tmp/dotp-heroes`).
 - `tools/export_web.sh` builds `build/web/` (no-threads template). Test it in headless Chromium
   (`--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`).
 - Always run Godot with `timeout`: a script error can leave it hanging.
@@ -32,6 +34,9 @@ imported with its `tools/game_import.py`).
   `models.gd` and `props.gd`; portraits rendered once at start by `portraits.gd`.
 - Data in `data.gd`: `TOWERS`, `ENEMIES`, `PLANES` (roads as polylines in Data units, theme, colours)
   and `waves_for(plane)`, which builds waves from a budget.
+- Modes (`Data.CAMPAIGN`, `LONG`, `ENDLESS`): `Data.waves_for(plane, mode, count)` builds wave w
+  the same whatever the count, so Endless grows its list as it goes. Heroes have five levels
+  (`Tower.MAX_LEVEL` 4); levels 4 and 5 reuse the level 3 model plus `Models._crown`.
 - `Battle.simulate(dt)` advances the game without rendering; the sim test, the smoke test and the
   title demo use it.
 - Quality (`Game.quality`, L key, `user://settings.cfg`): as in Aether Drift; the web build drops to

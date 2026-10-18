@@ -9,6 +9,7 @@ var screen: Control
 var battle: Battle
 var hud: Hud
 var plane := 0
+var mode := Data.CAMPAIGN
 var _fps_watch := -1.0
 var _fps_frames := 0
 var _demo_t := 0.0
@@ -26,6 +27,10 @@ func _ready() -> void:
 	if "--waves" in args:
 		add_child(load("res://tools/waves.gd").new())
 		return
+	for a in args:
+		if a.begins_with("--heroes"):
+			add_child(load("res://tools/hero_check.gd").new())
+			return
 	if "--lineup" in args:
 		add_child(load("res://tools/lineup.gd").new())
 		return
@@ -286,8 +291,9 @@ func _fill_plane(detail: PanelContainer, i: int) -> void:
 	v.add_child(Ui.wrap(d.new, 17, Color(0.7, 0.88, 1.0), 520))
 	v.add_child(Ui.label("Heroes", 18, Game.GOLD, Game.font_title_bold))
 	var hrow := HBoxContainer.new()
-	for id in Game.heroes_for(i):
-		var tr := _portrait(Portraits.heroes.get(id), 60)
+	var heroes := Game.heroes_for(i)
+	for id in heroes:
+		var tr := _portrait(Portraits.heroes.get(id), 60 if heroes.size() <= 8 else 48)
 		tr.tooltip_text = Data.TOWERS[id].name
 		hrow.add_child(tr)
 	v.add_child(hrow)
@@ -303,6 +309,27 @@ func _fill_plane(detail: PanelContainer, i: int) -> void:
 	go.custom_minimum_size = Vector2(320, 54)
 	go.disabled = not Game.plane_open(i)
 	v.add_child(go)
+	# the longer games for a bigger late game
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var long := Ui.button("LONG SIEGE: %d WAVES" % Data.wave_count(i, Data.LONG), func(): start_battle(i, Data.LONG), 16)
+	long.tooltip_text = "Twice the waves, a boss halfway and a much stronger one at the end. Every foe joins in."
+	long.custom_minimum_size = Vector2(255, 44)
+	long.disabled = not Game.plane_open(i)
+	row.add_child(long)
+	var endless := Ui.button("ENDLESS", func(): start_battle(i, Data.ENDLESS), 16)
+	endless.tooltip_text = "The horde never stops, and a boss comes every ten waves. How long can you hold?"
+	endless.custom_minimum_size = Vector2(255, 44)
+	endless.disabled = not Game.plane_open(i)
+	row.add_child(endless)
+	v.add_child(row)
+	var rec := []
+	if Game.long_won[i]:
+		rec.append("Long Siege won")
+	if Game.endless_best[i] > 0:
+		rec.append("Endless record: %d waves" % Game.endless_best[i])
+	if not rec.is_empty():
+		v.add_child(Ui.label(".  ".join(rec) + ".", 15, Game.GOLD))
 
 
 func _portrait(tex: Texture2D, s: float) -> TextureRect:
@@ -385,13 +412,13 @@ func show_howto() -> void:
 	v.add_child(Ui.title("How to play", 36))
 	var lines := [
 		"The Phyrexians pour out of the Realmbreaker's roots and march along the road to the sanctum. Every one that gets through costs lives. Lose all 20 and the plane falls.",
-		"Click a glowing build spot and call a hero onto it. Heroes attack on their own. Click a hero to upgrade it (twice), change who it aims at, or sell it.",
+		"Click a glowing build spot and call a hero onto it. Heroes attack on their own. Click a hero to upgrade it (four times: the Exalted and Legendary levels are costly), change who it aims at, or sell it.",
 		"Defeated Phyrexians give mana. Call the next wave early (N) for bonus mana.",
 		"Armoured foes shrug off physical attacks (spears, shuriken, stones); warded knights resist magic (fire, time, lightning, roots). Spirit daggers ignore both. Flyers can only be hit by heroes that reach the sky.",
 		"Oil Spitters freeze nearby heroes in glistening oil for a few seconds. Kill them first.",
 		"Spells: Q Halo Burst (click a spot), E Stasis (stops every Phyrexian). Each has a cooldown.",
-		"Keys: 1-8 build on the selected spot, U upgrade, Del sell, T aim, Tab game speed, Esc pause, L graphics quality, M sound. Mouse wheel zooms, right-drag pans.",
-		"Win a plane to open the next. Keep 18 or more lives for three stars.",
+		"Keys: 1-9, 0 and - build on the selected spot, U upgrade, Del sell, T aim, Tab game speed, Esc pause, L graphics quality, M sound. Mouse wheel zooms, right-drag pans.",
+		"Win a plane to open the next. Keep 18 or more lives for three stars. For a bigger late game, try the Long Siege (twice the waves) or Endless (a boss every ten waves) on any open plane.",
 	]
 	for l in lines:
 		v.add_child(Ui.wrap(l, 18, Game.PALE, 720))
@@ -400,15 +427,16 @@ func show_howto() -> void:
 
 # --- battle -------------------------------------------------------------------------------------
 
-func start_battle(i: int) -> void:
+func start_battle(i: int, m := Data.CAMPAIGN) -> void:
 	_clear_battle()
 	plane = i
+	mode = m
 	if screen:
 		screen.queue_free()
 		screen = null
 	battle = Battle.new()
 	add_child(battle)
-	battle.setup(i)
+	battle.setup(i, m)
 	battle.finished.connect(_on_finished)
 	hud = Hud.new()
 	ui.add_child(hud)
@@ -432,7 +460,7 @@ func _pause() -> void:
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
 	v.add_child(Ui.button("RESUME", _resume, 18))
-	v.add_child(Ui.button("RESTART", func(): start_battle(plane), 18))
+	v.add_child(Ui.button("RESTART", func(): start_battle(plane, mode), 18))
 	var q := Ui.button("GRAPHICS: " + Game.QUALITY_NAMES[Game.quality].to_upper(), func(): Game.cycle_quality(), 16)
 	s.set_meta("quality_button", q)
 	v.add_child(q)
@@ -459,8 +487,14 @@ func _on_finished(won: bool) -> void:
 	if battle == null:
 		return
 	var stars := battle.stars_won() if won else 0
-	if won:
+	var held := maxi(battle.wave_i - 1, 0)
+	var record := false
+	if won and mode == Data.CAMPAIGN:
 		Game.record_win(plane, stars)
+	elif won and mode == Data.LONG:
+		Game.record_long(plane)
+	elif mode == Data.ENDLESS:
+		record = Game.record_endless(plane, held)
 	var s := _new_screen(0.55)
 	var p := PanelContainer.new()
 	p.set_anchors_preset(Control.PRESET_CENTER)
@@ -470,18 +504,26 @@ func _on_finished(won: bool) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
 	p.add_child(v)
-	var final := won and plane == Data.PLANES.size() - 1
-	var t := Ui.title(("The Mother Falls" if final else "%s Holds" % Data.PLANES[plane].name) if won else "%s Has Fallen" % Data.PLANES[plane].name, 40)
+	var final := won and mode == Data.CAMPAIGN and plane == Data.PLANES.size() - 1
+	var title := ("The Mother Falls" if final else "%s Holds" % Data.PLANES[plane].name) if won else "%s Has Fallen" % Data.PLANES[plane].name
+	if mode == Data.ENDLESS:
+		title = "%d Waves Held" % held
+	var t := Ui.title(title, 40)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
-	if won:
+	if won and mode == Data.CAMPAIGN:
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		for k in 3:
 			row.add_child(Ui.icon("star" if k < stars else "star_empty", 54))
 		v.add_child(row)
 	var text := ""
-	if final:
+	if mode == Data.ENDLESS:
+		text = "%s held for %d waves against the endless horde. %d Phyrexians fell." % [Data.PLANES[plane].name, held, battle.stats.kills]
+		text += " A new record!" if record else " Your record here: %d waves." % Game.endless_best[plane]
+	elif won and mode == Data.LONG:
+		text = "The Long Siege is broken. %d Phyrexians fell, %d got through." % [battle.stats.kills, battle.stats.leaked]
+	elif final:
 		text = "The Porcelain Mother breaks apart at the Realmbreaker's root, and the great tree withers on every plane at once. Where its roots tore through, new paths between the worlds are left glowing. The planes are free, and for the first time they are all connected."
 	elif won:
 		text = "The sanctum stands. %d Phyrexians fell, %d got through." % [battle.stats.kills, battle.stats.leaked]
@@ -493,9 +535,9 @@ func _on_finished(won: bool) -> void:
 	var row2 := HBoxContainer.new()
 	row2.alignment = BoxContainer.ALIGNMENT_CENTER
 	row2.add_theme_constant_override("separation", 10)
-	if won and plane < Data.PLANES.size() - 1:
+	if won and mode == Data.CAMPAIGN and plane < Data.PLANES.size() - 1:
 		row2.add_child(Ui.button("NEXT: " + Data.PLANES[plane + 1].name.to_upper(), func(): start_battle(plane + 1), 17))
-	row2.add_child(Ui.button("PLAY AGAIN" if won else "TRY AGAIN", func(): start_battle(plane), 17))
+	row2.add_child(Ui.button("PLAY AGAIN" if won else "TRY AGAIN", func(): start_battle(plane, mode), 17))
 	row2.add_child(Ui.button("MAP", func():
 		_clear_battle()
 		show_campaign(), 17))
@@ -506,23 +548,25 @@ func _on_finished(won: bool) -> void:
 
 func _simtest() -> void:
 	var only := -1
+	var mode := Data.CAMPAIGN
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--plane="):
 			only = int(a.get_slice("=", 1))
+		if a.begins_with("--mode="):
+			mode = int(a.get_slice("=", 1))
 	var verbose := "--verbose" in OS.get_cmdline_user_args()
 	for p in Data.PLANES.size():
 		if only >= 0 and p != only:
 			continue
-		var t0 := Time.get_ticks_msec()
 		var b := Battle.new()
 		add_child(b)
-		b.setup(p)
+		b.setup(p, mode)
 		var t1 := Time.get_ticks_msec()
 		b.paused = true
 		b.autoplay = true
 		var steps := 0
 		var last_w := 0
-		while b.state != Battle.WON and b.state != Battle.LOST and steps < 60 * 60 * 30:
+		while b.state != Battle.WON and b.state != Battle.LOST and steps < 4 * 60 * 60 * 30 and b.wave_i < 120:
 			b.simulate(1.0 / 30.0)
 			steps += 1
 			if verbose and b.boss and steps % 300 == 0:
@@ -533,11 +577,14 @@ func _simtest() -> void:
 				for t in b.towers.values():
 					tl.append("%s%d" % [t.id, t.level])
 				print("  t=%4.0f wave %d lives %d mana %d alive %d towers %s" % [b.time, b.wave_i, b.lives, b.mana, b.enemies.size(), tl])
-		var levels := [0, 0, 0]
+		var levels := [0, 0, 0, 0, 0]
+		var kinds := {}
 		for t in b.towers.values():
 			levels[t.level] += 1
-		print("SIM plane %d %-13s %s lives %2d waves %d/%d time %4.0fs towers %d (lv %s) mana left %d kills %d pads %d  build %dms sim %dms" % [p, Data.PLANES[p].name,
-			"WON " if b.state == Battle.WON else "LOST", b.lives, b.wave_i, b.waves.size(), b.time, b.towers.size(), levels, b.mana, b.stats.kills, b.level.pads.size(), t1 - t0, Time.get_ticks_msec() - t1])
+			kinds[t.id] = int(kinds.get(t.id, 0)) + 1
+		print("SIM %s plane %d %-13s %s lives %2d waves %d/%d time %4.0fs towers %d (lv %s) mana left %d kills %d pads %d  sim %dms" % [Data.MODE_NAMES[mode], p, Data.PLANES[p].name,
+			"WON " if b.state == Battle.WON else "LOST", b.lives, b.wave_i, b.waves.size(), b.time, b.towers.size(), levels, b.mana, b.stats.kills, b.level.pads.size(), Time.get_ticks_msec() - t1])
+		print("    heroes %s" % [kinds])
 		b.queue_free()
 		await get_tree().process_frame
 	get_tree().quit()

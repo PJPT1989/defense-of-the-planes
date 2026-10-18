@@ -10,6 +10,10 @@ const SETTINGS_PATH := "user://settings.cfg"
 const PROGRESS_PATH := "user://progress.cfg"
 
 const TITLE := "Defense of the Planes"
+## Keys that build the heroes of the build menu, in order, and how the menu labels them.
+const BUILD_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_0, KEY_MINUS]
+const BUILD_KEY_NAMES := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-"]
+
 const TAGLINE := "The machines have come for every world. Hold the line."
 
 const GOLD := Color(0.95, 0.78, 0.42)
@@ -23,6 +27,9 @@ var muted := false
 var web := false
 ## Stars won on each plane (0 = not won yet). Plane i is open when plane i-1 is won.
 var stars: Array[int] = []
+## Per plane: whether the Long Siege was won, and the most Endless waves held.
+var long_won: Array[bool] = []
+var endless_best: Array[int] = []
 var font_title: FontVariation
 var font_title_bold: FontVariation
 var font_body: Font
@@ -87,12 +94,12 @@ func _setup_input() -> void:
 			var e := InputEventKey.new()
 			e.physical_keycode = k
 			InputMap.action_add_event(action, e)
-	for i in 8:
+	for i in BUILD_KEYS.size():
 		var a := "build%d" % (i + 1)
 		if not InputMap.has_action(a):
 			InputMap.add_action(a)
 		var e := InputEventKey.new()
-		e.physical_keycode = KEY_1 + i
+		e.physical_keycode = BUILD_KEYS[i]
 		InputMap.action_add_event(a, e)
 
 
@@ -147,23 +154,49 @@ func _save() -> void:
 
 func _load_progress() -> void:
 	stars.clear()
+	long_won.clear()
+	endless_best.clear()
 	for i in Data.PLANES.size():
 		stars.append(0)
+		long_won.append(false)
+		endless_best.append(0)
 	if _testing():
 		return
 	var cfg := ConfigFile.new()
 	if cfg.load(PROGRESS_PATH) == OK:
 		for i in Data.PLANES.size():
 			stars[i] = clampi(int(cfg.get_value("stars", Data.PLANES[i].id, 0)), 0, 3)
+			long_won[i] = bool(cfg.get_value("long", Data.PLANES[i].id, false))
+			endless_best[i] = maxi(int(cfg.get_value("endless", Data.PLANES[i].id, 0)), 0)
 
 
 func record_win(plane: int, won_stars: int) -> void:
 	stars[plane] = maxi(stars[plane], won_stars)
+	_save_progress()
+
+
+func record_long(plane: int) -> void:
+	long_won[plane] = true
+	_save_progress()
+
+
+## Returns true when `waves` is a new Endless record for the plane.
+func record_endless(plane: int, waves: int) -> bool:
+	if waves <= endless_best[plane]:
+		return false
+	endless_best[plane] = waves
+	_save_progress()
+	return true
+
+
+func _save_progress() -> void:
 	if _testing():
 		return
 	var cfg := ConfigFile.new()
 	for i in Data.PLANES.size():
 		cfg.set_value("stars", Data.PLANES[i].id, stars[i])
+		cfg.set_value("long", Data.PLANES[i].id, long_won[i])
+		cfg.set_value("endless", Data.PLANES[i].id, endless_best[i])
 	cfg.save(PROGRESS_PATH)
 
 

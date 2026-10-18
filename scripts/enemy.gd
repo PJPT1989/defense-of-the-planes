@@ -1,7 +1,7 @@
 class_name Enemy
 extends Node3D
 ## One Phyrexian: walks (or flies) along its road, takes damage after armour or resistance,
-## can be slowed, rooted and set burning, and animates its legs, wings and body as it goes.
+## can be slowed, rooted, set burning, sundered (armour and wards cracked) and knocked back, and animates its legs, wings and body as it goes.
 ## Spitters, the Compleated Walker and the Porcelain Mother oil nearby heroes; the Mother also
 ## calls up husks; Broodmothers burst into mites.
 
@@ -27,6 +27,9 @@ var root_t := 0.0
 var freeze_t := 0.0
 var burn := 0.0
 var burn_t := 0.0
+var sunder := 0.0
+var sunder_t := 0.0
+var bounty_mul := 1.0
 var spit_cd := 0.0
 var summon_cd := 8.0
 var anim := 0.0
@@ -99,8 +102,8 @@ func damage(amount: float, type: String, from_boss_bonus := 0.0) -> void:
 		return
 	var mul := 1.0
 	match type:
-		"phys": mul = 1.0 - armor
-		"magic": mul = 1.0 - resist
+		"phys": mul = 1.0 - maxf(armor - sunder, 0.0)
+		"magic": mul = 1.0 - maxf(resist - sunder, 0.0)
 	if boss:
 		mul *= 1.0 + from_boss_bonus
 	hp -= amount * mul
@@ -124,6 +127,19 @@ func apply_root(t: float) -> void:
 	root_t = maxf(root_t, t * (0.35 if boss else 1.0))
 
 
+## Cracked armour and wards: both count `amount` lower for a while (half as much on bosses).
+func apply_sunder(amount: float, t: float) -> void:
+	sunder = maxf(sunder, amount * (0.5 if boss else 1.0))
+	sunder_t = maxf(sunder_t, t)
+
+
+## Thrown back up the road by a wave (bosses barely move, flyers are not hit at all).
+func knock_back(d: float) -> void:
+	if flying:
+		return
+	dist = maxf(dist - d * (0.15 if boss else 1.0), Level.SPAWN_AT * 0.5)
+
+
 func apply_burn(dps: float, t: float) -> void:
 	burn = maxf(burn, dps)
 	burn_t = maxf(burn_t, t)
@@ -137,6 +153,10 @@ func step(dt: float) -> void:
 		if slow_t <= 0.0:
 			slow = 0.0
 	root_t = maxf(root_t - dt, 0.0)
+	if sunder_t > 0.0:
+		sunder_t -= dt
+		if sunder_t <= 0.0:
+			sunder = 0.0
 	freeze_t = maxf(freeze_t - dt, 0.0)
 	if burn_t > 0.0:
 		burn_t -= dt
